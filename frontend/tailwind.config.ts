@@ -41,8 +41,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        heading: ["var(--font-poppins)", "sans-serif"],
-        body: ["var(--font-inter)", "sans-serif"],
+        heading: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+        body: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
       },
       fontSize: {
         display: ["64px", { lineHeight: "1.1", fontWeight: "700" }],

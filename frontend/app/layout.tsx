@@ -5,9 +5,6 @@ import { QueryProvider } from "@/providers/query-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { ToastProvider } from "@/providers/toast-provider";
 import { AuthProvider } from "@/providers/auth-provider";
-import { Poppins, Inter } from "next/font/google";
-const poppins = Poppins({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-poppins", display: "swap" });
-const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-inter", display: "swap" });
 
 export const metadata: Metadata = {
   title: {
@@ -28,7 +25,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="id" suppressHydrationWarning className={`${poppins.variable} ${inter.variable}`}>
+    <html lang="id" suppressHydrationWarning>
       <body>
         <QueryProvider>
           <ThemeProvider>
