@@ -34,17 +34,23 @@ type AppConfig struct {
 
 type DatabaseConfig struct {
 	Host, Port, User, Password, Name string
+	TLS                              bool
 	MaxOpenConns, MaxIdleConns       int
 	ConnMaxLifetime                  time.Duration
 }
 
 func (d DatabaseConfig) DSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Asia%%2FJakarta",
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Asia%%2FJakarta",
 		d.User, d.Password, d.Host, d.Port, d.Name)
+	if d.TLS {
+		dsn += "&tls=true"
+	}
+	return dsn
 }
 
 type RedisConfig struct {
 	Addr, Password string
+	Enabled        bool
 	DB             int
 }
 
@@ -73,6 +79,7 @@ type StorageConfig struct {
 
 func Load() (*Config, error) {
 	_ = godotenv.Load()
+	port := getEnv("PORT", getEnv("APP_PORT", "8080"))
 	env := getEnv("APP_ENV", "local")
 	switch env {
 	case "local", "test", "staging", "production":
@@ -90,17 +97,18 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		App: AppConfig{
-			Env: env, Port: getEnv("APP_PORT", "8080"),
+			Env: env, Port: port,
 			FrontendURL: getEnv("FRONTEND_URL", "http://localhost:3000"),
-			PublicURL:   getEnv("BACKEND_PUBLIC_URL", "http://localhost:"+getEnv("APP_PORT", "8080")),
+			PublicURL:   getEnv("BACKEND_PUBLIC_URL", "http://localhost:"+port),
 		},
 		Database: DatabaseConfig{
 			Host: getEnv("DB_HOST", "127.0.0.1"), Port: getEnv("DB_PORT", "3306"),
 			User: getEnv("DB_USER", "root"), Password: getEnv("DB_PASSWORD", ""), Name: getEnv("DB_NAME", "kawah_putih_db"),
+			TLS:          getEnvBool("DB_TLS", false),
 			MaxOpenConns: getEnvInt("DB_MAX_OPEN_CONNS", 50), MaxIdleConns: getEnvInt("DB_MAX_IDLE_CONNS", 10),
 			ConnMaxLifetime: time.Hour,
 		},
-		Redis: RedisConfig{Addr: getEnv("REDIS_ADDR", "127.0.0.1:6379"), Password: getEnv("REDIS_PASSWORD", ""), DB: getEnvInt("REDIS_DB", 0)},
+		Redis: RedisConfig{Addr: getEnv("REDIS_ADDR", "127.0.0.1:6379"), Password: getEnv("REDIS_PASSWORD", ""), Enabled: strings.TrimSpace(os.Getenv("REDIS_ADDR")) != "", DB: getEnvInt("REDIS_DB", 0)},
 		JWT: JWTConfig{
 			AccessSecret: getEnv("JWT_ACCESS_SECRET", ""), RefreshSecret: getEnv("JWT_REFRESH_SECRET", ""),
 			AccessTTL:  time.Duration(getEnvInt("JWT_ACCESS_TTL_MINUTES", 15)) * time.Minute,
@@ -172,6 +180,18 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	value, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func getEnvInt(key string, fallback int) int {

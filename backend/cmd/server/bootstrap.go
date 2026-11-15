@@ -43,6 +43,9 @@ func connectInfra(cfg *config.Config, log *zap.Logger) (*gorm.DB, *redis.Client)
 		log.Fatal("failed to migrate and seed database", zap.Error(err))
 	}
 
+	if !cfg.Redis.Enabled {
+		return db, nil
+	}
 	redisClient, err := cache.NewClient(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.DB)
 	if err != nil {
 		log.Warn("redis unavailable, continuing without cache", zap.Error(err))
