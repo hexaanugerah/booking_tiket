@@ -1,0 +1,17 @@
+// Konfigurasi Cloudflare Workers untuk frontend Next.js (adapter OpenNext).
+// Build:  npm run cf:build
+// Preview lokal: npm run cf:preview
+// Deploy: npm run cf:deploy
+{
+  "main": ".open-next/worker.js",
+  "name": "kawahputih",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
