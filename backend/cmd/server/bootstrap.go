@@ -35,7 +35,7 @@ func connectInfra(cfg *config.Config, log *zap.Logger) (*gorm.DB, *redis.Client)
 	}
 	db, err := config.NewDatabase(cfg.Database, gormLogLevel)
 	if err != nil {
-		log.Fatal("failed to connect to configured database")
+		log.Fatal("failed to connect to configured database", zap.Error(err))
 	}
 	log.Info("database connected")
 
