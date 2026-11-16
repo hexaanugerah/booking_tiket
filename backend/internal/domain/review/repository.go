@@ -17,11 +17,13 @@ type Repository interface {
 	Create(ctx context.Context, review *Review) error
 	FindByID(ctx context.Context, id string) (*Review, error)
 	FindByBookingID(ctx context.Context, bookingID string) (*Review, error)
+	FindByBookingIDUnscoped(ctx context.Context, bookingID string) (*Review, error)
 	ListByUser(ctx context.Context, userID string, offset, limit int) ([]Review, int64, error)
 	ListAll(ctx context.Context, status string, offset, limit int) ([]Review, int64, error)
 	ListApproved(ctx context.Context, offset, limit int) ([]Review, int64, error)
 	Summary(ctx context.Context) (float64, int64, error)
 	Update(ctx context.Context, review *Review) error
+	Restore(ctx context.Context, review *Review) error
 	Delete(ctx context.Context, id string) error
 	DestinationExists(ctx context.Context, id string) (bool, error)
 	FindBooking(ctx context.Context, bookingID string) (*BookingSnapshot, error)
@@ -54,6 +56,20 @@ func (r *repository) FindByID(ctx context.Context, id string) (*Review, error) {
 func (r *repository) FindByBookingID(ctx context.Context, bookingID string) (*Review, error) {
 	var item Review
 	err := r.db.WithContext(ctx).Where("booking_id = ?", bookingID).First(&item).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+// FindByBookingIDUnscoped ikut mengambil ulasan yang sudah dihapus (soft delete),
+// supaya booking yang sama bisa diulas kembali tanpa melanggar unique index.
+func (r *repository) FindByBookingIDUnscoped(ctx context.Context, bookingID string) (*Review, error) {
+	var item Review
+	err := r.db.WithContext(ctx).Unscoped().Where("booking_id = ?", bookingID).First(&item).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
@@ -107,6 +123,12 @@ func (r *repository) list(q *gorm.DB, offset, limit int) ([]Review, int64, error
 
 func (r *repository) Update(ctx context.Context, review *Review) error {
 	return r.db.WithContext(ctx).Save(review).Error
+}
+
+// Restore menghidupkan kembali ulasan yang sebelumnya dihapus (soft delete).
+func (r *repository) Restore(ctx context.Context, review *Review) error {
+	review.DeletedAt = gorm.DeletedAt{}
+	return r.db.WithContext(ctx).Unscoped().Save(review).Error
 }
 
 func (r *repository) Delete(ctx context.Context, id string) error {

@@ -3,6 +3,7 @@ package review
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/KawahPutih/backend/pkg/apperror"
 )
@@ -66,6 +67,29 @@ func (s *Service) Create(ctx context.Context, userID string, req CreateReviewReq
 	}
 	if existing != nil {
 		return nil, ErrAlreadyReviewed
+	}
+
+	// Booking yang sebelumnya pernah diulas lalu ulasannya dihapus: hidupkan
+	// kembali baris lama agar unique index booking_id tetap terpenuhi.
+	deleted, err := s.repo.FindByBookingIDUnscoped(ctx, req.BookingID)
+	if err != nil {
+		return nil, apperror.Internal(err)
+	}
+	if deleted != nil {
+		if !deleted.DeletedAt.Valid {
+			return nil, ErrAlreadyReviewed
+		}
+		deleted.UserID = userID
+		deleted.DestinationID = req.DestinationID
+		deleted.Rating = req.Rating
+		deleted.Comment = req.Comment
+		deleted.Status = StatusApproved
+		deleted.IsApproved = true
+		deleted.CreatedAt = time.Now()
+		if err := s.repo.Restore(ctx, deleted); err != nil {
+			return nil, apperror.Internal(err)
+		}
+		return deleted, nil
 	}
 
 	review := &Review{

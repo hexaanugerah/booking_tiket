@@ -38,6 +38,7 @@ export function HomeReviews() {
   const [summary, setSummary] = useState<ReviewSummary | null>(null);
   const [reviewsError, setReviewsError] = useState(false);
   const [eligibleBookings, setEligibleBookings] = useState<Booking[] | null>(null);
+  const [myReviewCount, setMyReviewCount] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -97,6 +98,7 @@ export function HomeReviews() {
   const loadMine = useCallback(async () => {
     if (!userId) {
       setEligibleBookings(null);
+      setMyReviewCount(0);
       setFormError(null);
       setSuccess(null);
       return;
@@ -111,6 +113,7 @@ export function HomeReviews() {
       const reviewedBookingIds = new Set(
         myReviews.map((review) => review.booking_id).filter((id): id is string => Boolean(id))
       );
+      setMyReviewCount(myReviews.length);
       setEligibleBookings(
         bookings.filter(
           (booking) => REVIEWABLE_STATUSES.has(booking.status) && !reviewedBookingIds.has(booking.id)
@@ -145,6 +148,7 @@ export function HomeReviews() {
       if (created.is_approved) {
         setReviews((items) => [created, ...(items ?? [])]);
         setTotalReviews((count) => count + 1);
+        setMyReviewCount((count) => count + 1);
         void refreshSummary();
       }
       setSuccess("Terima kasih! Ulasanmu sudah tayang di halaman ini.");
@@ -271,16 +275,11 @@ export function HomeReviews() {
                   </p>
                 )}
                 <p className="text-sm leading-relaxed text-[#29445e]">
-                  Belum ada booking yang bisa diulas. Ulasan tersedia setelah pembayaran dikonfirmasi dan
-                  booking belum pernah dinilai.
+                  {myReviewCount > 0
+                    ? "Semua booking yang bisa diulas sudah kamu nilai. Terima kasih sudah berbagi pengalaman!"
+                    : "Belum ada booking yang bisa diulas. Ulasan tersedia setelah pembayaran dikonfirmasi dan booking belum pernah dinilai."}
                 </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Link
-                    href="/packages"
-                    className="inline-flex h-9 items-center rounded-md bg-[#1768ad] px-4 text-xs font-semibold text-white hover:bg-[#14548f]"
-                  >
-                    Pesan Tiket
-                  </Link>
+                <div className="mt-4">
                   <Link
                     href="/review"
                     className="inline-flex h-9 items-center rounded-md border border-[#d7e3ed] bg-white px-4 text-xs font-semibold text-[#29445e] hover:bg-[#f2f7fb]"
