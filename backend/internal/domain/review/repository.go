@@ -65,8 +65,6 @@ func (r *repository) FindByBookingID(ctx context.Context, bookingID string) (*Re
 	return &item, nil
 }
 
-// FindByBookingIDUnscoped ikut mengambil ulasan yang sudah dihapus (soft delete),
-// supaya booking yang sama bisa diulas kembali tanpa melanggar unique index.
 func (r *repository) FindByBookingIDUnscoped(ctx context.Context, bookingID string) (*Review, error) {
 	var item Review
 	err := r.db.WithContext(ctx).Unscoped().Where("booking_id = ?", bookingID).First(&item).Error
@@ -125,7 +123,6 @@ func (r *repository) Update(ctx context.Context, review *Review) error {
 	return r.db.WithContext(ctx).Save(review).Error
 }
 
-// Restore menghidupkan kembali ulasan yang sebelumnya dihapus (soft delete).
 func (r *repository) Restore(ctx context.Context, review *Review) error {
 	review.DeletedAt = gorm.DeletedAt{}
 	return r.db.WithContext(ctx).Unscoped().Save(review).Error

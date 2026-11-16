@@ -1,6 +1,4 @@
 import { z } from "zod";
-
-// Aturan ini harus sama dengan validator backend (rating 1-5, ulasan 10-1000 karakter).
 export const RATING_MIN = 1;
 export const RATING_MAX = 5;
 export const COMMENT_MIN = 10;
