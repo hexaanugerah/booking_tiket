@@ -20,6 +20,7 @@ func (b *Base) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
 type Review struct {
 	Base
 	UserID        string  `gorm:"type:char(36);index" json:"user_id"`

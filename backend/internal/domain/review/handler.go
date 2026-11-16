@@ -34,7 +34,7 @@ func (h *Handler) Create(c *gin.Context) {
 		apperror.WriteHTTP(c, err)
 		return
 	}
-	response.Created(c, "Ulasan berhasil dikirim dan menunggu moderasi.", ToResponse(result))
+	response.Created(c, "Ulasan berhasil dikirim.", ToResponse(result))
 }
 
 func (h *Handler) Update(c *gin.Context) {
@@ -93,6 +93,18 @@ func (h *Handler) ListApproved(c *gin.Context) {
 		return
 	}
 	response.OKWithMeta(c, "Ulasan retrieved", ToResponseList(items), response.BuildMeta(page, limit, total))
+}
+
+func (h *Handler) Summary(c *gin.Context) {
+	average, total, err := h.service.Summary(c.Request.Context())
+	if err != nil {
+		apperror.WriteHTTP(c, err)
+		return
+	}
+	response.OK(c, "Ringkasan rating retrieved", SummaryResponse{
+		AverageRating: average,
+		TotalReviews:  total,
+	})
 }
 
 func (h *Handler) Moderate(c *gin.Context) {

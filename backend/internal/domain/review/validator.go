@@ -18,7 +18,6 @@ const (
 
 var validate = validator.New()
 
-
 func Validate(s interface{}) []response.FieldError {
 	err := validate.Struct(s)
 	if err == nil {

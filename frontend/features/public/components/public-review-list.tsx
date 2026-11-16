@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { reviewService } from "@/services/review.api.service";
-import type { Review } from "@/types/review";
+import type { Review, ReviewSummary } from "@/types/review";
 import { RatingStars, ReviewCard } from "@/features/review/components/review-display";
 
 export function PublicReviewList() {
   const [reviews, setReviews] = useState<Review[] | null>(null);
   const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<ReviewSummary | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -26,15 +27,26 @@ export function PublicReviewList() {
         setReviews([]);
         setError(true);
       });
+    reviewService
+      .summary()
+      .then((data) => {
+        if (!alive) return;
+        setSummary(data);
+      })
+      .catch(() => {
+      });
     return () => {
       alive = false;
     };
   }, []);
 
   const averageRating = useMemo(() => {
+    if (summary && summary.total_reviews > 0) return summary.average_rating;
     if (!reviews || reviews.length === 0) return 0;
     return reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
-  }, [reviews]);
+  }, [summary, reviews]);
+
+  const displayTotal = summary?.total_reviews ?? total;
 
   return (
     <div>
@@ -45,8 +57,7 @@ export function PublicReviewList() {
             Apa kata pengunjung Kawah Putih
           </h1>
           <p className="mt-3 text-[15px] leading-relaxed text-[#698097]">
-            Rating dan ulasan hanya berasal dari pengunjung dengan booking yang sudah dibayar dan disetujui
-            admin.
+            Rating dan ulasan hanya berasal dari pengunjung dengan booking yang sudah dibayar.
           </p>
         </div>
 
@@ -55,7 +66,7 @@ export function PublicReviewList() {
             <span className="text-4xl font-bold leading-none text-[#17324d]">{averageRating.toFixed(1)}</span>
             <div>
               <RatingStars value={Math.round(averageRating)} />
-              <p className="mt-1 text-xs text-[#698097]">{total} ulasan</p>
+              <p className="mt-1 text-xs text-[#698097]">{displayTotal} ulasan</p>
             </div>
           </div>
         )}
@@ -73,8 +84,7 @@ export function PublicReviewList() {
         </p>
       ) : reviews.length === 0 ? (
         <p className="mt-8 rounded-md border border-[#d7e3ed] bg-white px-5 py-4 text-sm text-[#698097]">
-          Belum ada ulasan yang tayang. Bagikan pengalamanmu dan jadilah ulasan pertama setelah disetujui
-          admin.
+          Belum ada ulasan. Bagikan pengalamanmu dan jadilah yang pertama menulis ulasan.
         </p>
       ) : (
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

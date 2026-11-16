@@ -88,7 +88,7 @@ export function ReviewManager() {
     setError(null);
     try {
       await reviewService.create(values);
-      toast.success("Ulasan terkirim dan menunggu moderasi");
+      toast.success("Ulasan terkirim dan langsung tayang");
       reset({ booking_id: "", rating: 0, comment: "" });
       const myReviews = await reviewService.listMine();
       setReviews(myReviews);
@@ -208,7 +208,7 @@ export function ReviewManager() {
           )}
         </SectionCard>
 
-        <SectionCard title="Riwayat Ulasan" subtitle="Ulasan akan tampil setelah disetujui admin">
+        <SectionCard title="Riwayat Ulasan" subtitle="Ulasan yang sudah kamu kirim">
           {loading ? (
             <div className="h-40 animate-pulse rounded-md bg-[#eef5fb]" />
           ) : (reviews ?? []).length === 0 ? (
@@ -226,17 +226,15 @@ export function ReviewManager() {
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusPill status={REVIEW_STATUS_LABEL[review.status]} />
-                      {review.status === "PENDING" && (
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(review)}
-                          disabled={deletingId === review.id}
-                          className="rounded p-1 text-[#c53030] hover:bg-[#fdeaea] disabled:opacity-50"
-                          aria-label="Hapus ulasan"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(review)}
+                        disabled={deletingId === review.id}
+                        className="rounded p-1 text-[#c53030] hover:bg-[#fdeaea] disabled:opacity-50"
+                        aria-label="Hapus ulasan"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                   <RatingStars value={review.rating} className="mt-2" />

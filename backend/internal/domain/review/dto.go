@@ -34,6 +34,12 @@ type ModerateReviewRequest struct {
 	Status string `json:"status" validate:"required,oneof=APPROVED REJECTED"`
 }
 
+// SummaryResponse adalah agregat rating untuk ulasan yang sudah tayang.
+type SummaryResponse struct {
+	AverageRating float64 `json:"average_rating"`
+	TotalReviews  int64   `json:"total_reviews"`
+}
+
 type Response struct {
 	ID            string `json:"id"`
 	UserID        string `json:"user_id"`

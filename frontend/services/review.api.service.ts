@@ -1,9 +1,9 @@
 import { apiClient } from "@/lib/api/client";
 import type { ApiResponse } from "@/types/api";
-import type { CreateReviewPayload, Review, UpdateReviewPayload } from "@/types/review";
+import type { CreateReviewPayload, Review, ReviewSummary, UpdateReviewPayload } from "@/types/review";
 
 export const reviewService = {
-  /** Ulasan yang sudah disetujui admin — boleh dibaca tanpa login. */
+  /** Ulasan yang sudah tayang — boleh dibaca tanpa login. */
   async listApproved(params: { page?: number; limit?: number } = {}): Promise<{ items: Review[]; total: number }> {
     const response = await apiClient.get<ApiResponse<Review[]>>("/reviews", {
       page: String(params.page ?? 1),
@@ -12,6 +12,18 @@ export const reviewService = {
     return {
       items: response.data ?? [],
       total: response.meta?.total ?? response.data?.length ?? 0,
+    };
+  },
+
+  /** Rata-rata rating dan jumlah ulasan tayang dari seluruh data. */
+  async summary(): Promise<ReviewSummary> {
+    const response = await apiClient.get<ApiResponse<ReviewSummary>>("/reviews/summary");
+    if (!response.success || !response.data) {
+      throw new Error(response.message || "Gagal memuat ringkasan ulasan");
+    }
+    return {
+      average_rating: Number(response.data.average_rating) || 0,
+      total_reviews: Number(response.data.total_reviews) || 0,
     };
   },
 

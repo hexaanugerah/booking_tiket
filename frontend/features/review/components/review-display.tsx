@@ -42,7 +42,6 @@ interface ReviewCardProps {
   clamp?: boolean;
 }
 
-/** Kartu ulasan publik — identitas penulis disamarkan, tetapi status booking tetap terlihat. */
 export function ReviewCard({ review, className, clamp = false }: ReviewCardProps) {
   return (
     <article className={cn("rounded-md border border-[#d7e3ed] bg-[#f9fcff] p-4", className)}>

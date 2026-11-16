@@ -8,6 +8,7 @@ import (
 
 func RegisterRoutes(rg *gin.RouterGroup, h *Handler, jwtManager *jwtutil.Manager) {
 	rg.GET("/reviews", h.ListApproved)
+	rg.GET("/reviews/summary", h.Summary)
 
 	requireAuth := middleware.RequireAuth(jwtManager)
 

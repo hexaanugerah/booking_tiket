@@ -13,6 +13,11 @@ export interface Review {
   updated_at: string;
 }
 
+export interface ReviewSummary {
+  average_rating: number;
+  total_reviews: number;
+}
+
 export interface CreateReviewPayload {
   booking_id: string;
   destination_id?: string;

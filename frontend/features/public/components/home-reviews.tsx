@@ -12,7 +12,7 @@ import { useAuthReady } from "@/providers/auth-provider";
 import { useAuthStore } from "@/store/auth.store";
 import { cn } from "@/lib/utils";
 import type { Booking } from "@/types/api";
-import type { Review } from "@/types/review";
+import type { Review, ReviewSummary } from "@/types/review";
 import { ReviewCard, RatingStars } from "@/features/review/components/review-display";
 import {
   COMMENT_MAX,
@@ -35,6 +35,7 @@ export function HomeReviews() {
 
   const [reviews, setReviews] = useState<Review[] | null>(null);
   const [totalReviews, setTotalReviews] = useState(0);
+  const [summary, setSummary] = useState<ReviewSummary | null>(null);
   const [reviewsError, setReviewsError] = useState(false);
   const [eligibleBookings, setEligibleBookings] = useState<Booking[] | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -71,9 +72,26 @@ export function HomeReviews() {
         setReviews([]);
         setReviewsError(true);
       });
+    reviewService
+      .summary()
+      .then((data) => {
+        if (!alive) return;
+        setSummary(data);
+      })
+      .catch(() => {
+        // Ringkasan gagal dimuat — rata-rata dihitung dari daftar ulasan yang tampil.
+      });
     return () => {
       alive = false;
     };
+  }, []);
+
+  const refreshSummary = useCallback(async () => {
+    try {
+      setSummary(await reviewService.summary());
+    } catch {
+      // Biarkan rata-rata dihitung dari daftar ulasan yang sudah diperbarui.
+    }
   }, []);
 
   const loadMine = useCallback(async () => {
@@ -110,9 +128,12 @@ export function HomeReviews() {
   }, [ready, loadMine]);
 
   const averageRating = useMemo(() => {
+    if (summary && summary.total_reviews > 0) return summary.average_rating;
     if (!reviews || reviews.length === 0) return 0;
     return reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
-  }, [reviews]);
+  }, [summary, reviews]);
+
+  const displayTotal = summary?.total_reviews ?? totalReviews;
 
   async function onSubmit(values: ReviewFormValues) {
     if (!user) return;
@@ -120,10 +141,15 @@ export function HomeReviews() {
     setFormError(null);
     setSuccess(null);
     try {
-      await reviewService.create(values);
-      setSuccess("Terima kasih! Ulasanmu sudah terkirim dan menunggu moderasi admin.");
+      const created = await reviewService.create(values);
+      if (created.is_approved) {
+        setReviews((items) => [created, ...(items ?? [])]);
+        setTotalReviews((count) => count + 1);
+        void refreshSummary();
+      }
+      setSuccess("Terima kasih! Ulasanmu sudah tayang di halaman ini.");
       toast.success("Ulasan terkirim", {
-        description: "Ulasan akan tampil di halaman ini setelah disetujui admin.",
+        description: "Ulasanmu langsung tayang di halaman ini.",
       });
       setEligibleBookings((items) => (items ?? []).filter((booking) => booking.id !== values.booking_id));
       reset({ booking_id: "", rating: 0, comment: "" });
@@ -161,7 +187,7 @@ export function HomeReviews() {
                   </span>
                   <div>
                     <RatingStars value={Math.round(averageRating)} starClassName="h-3.5 w-3.5" />
-                    <p className="mt-1 text-xs text-[#698097]">{totalReviews} ulasan</p>
+                    <p className="mt-1 text-xs text-[#698097]">{displayTotal} ulasan</p>
                   </div>
                 </div>
               )}
@@ -179,8 +205,7 @@ export function HomeReviews() {
               </p>
             ) : visibleReviews.length === 0 ? (
               <p className="mt-6 rounded-md border border-[#d7e3ed] bg-[#f7fbff] px-4 py-3 text-sm text-[#698097]">
-                Belum ada ulasan yang tayang. Bagikan pengalamanmu dan jadilah ulasan pertama setelah
-                disetujui admin.
+                Belum ada ulasan. Bagikan pengalamanmu dan jadilah yang pertama menulis ulasan.
               </p>
             ) : (
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -203,8 +228,8 @@ export function HomeReviews() {
           <div className="h-fit rounded-lg border border-[#1768ad]/20 bg-[#f7fbff] p-5">
             <h3 className="text-base font-bold text-[#17324d]">Bagikan pengalamanmu</h3>
             <p className="mt-1 text-xs leading-relaxed text-[#698097]">
-              Rating 1-5 dan ulasan {COMMENT_MIN}-{COMMENT_MAX} karakter. Ulasan tampil setelah disetujui
-              admin.
+              Rating 1-5 dan ulasan {COMMENT_MIN}-{COMMENT_MAX} karakter. Ulasan langsung tayang di
+              halaman ini.
             </p>
 
             {success && (
@@ -257,10 +282,10 @@ export function HomeReviews() {
                     Pesan Tiket
                   </Link>
                   <Link
-                    href="/dashboard/review"
+                    href="/review"
                     className="inline-flex h-9 items-center rounded-md border border-[#d7e3ed] bg-white px-4 text-xs font-semibold text-[#29445e] hover:bg-[#f2f7fb]"
                   >
-                    Dasbor Ulasan
+                    Lihat Semua Ulasan
                   </Link>
                 </div>
               </div>

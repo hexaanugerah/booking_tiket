@@ -74,8 +74,8 @@ func (s *Service) Create(ctx context.Context, userID string, req CreateReviewReq
 		DestinationID: req.DestinationID,
 		Rating:        req.Rating,
 		Comment:       req.Comment,
-		Status:        StatusPending,
-		IsApproved:    false,
+		Status:        StatusApproved,
+		IsApproved:    true,
 	}
 	if err := s.repo.Create(ctx, review); err != nil {
 		return nil, apperror.Internal(err)
@@ -96,9 +96,6 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRevie
 	if err != nil {
 		return nil, err
 	}
-	if review.Status != StatusPending {
-		return nil, ErrNotEditable
-	}
 
 	review.Rating = req.Rating
 	review.Comment = req.Comment
@@ -113,10 +110,7 @@ func (s *Service) Delete(ctx context.Context, userID, id string) error {
 	if err != nil {
 		return err
 	}
-	if review.Status == StatusApproved {
-		return ErrNotEditable
-	}
-	if err := s.repo.Delete(ctx, id); err != nil {
+	if err := s.repo.Delete(ctx, review.ID); err != nil {
 		return apperror.Internal(err)
 	}
 	return nil
@@ -175,6 +169,14 @@ func (s *Service) ListApproved(ctx context.Context, page, limit int) ([]Review, 
 		return nil, 0, apperror.Internal(err)
 	}
 	return items, total, nil
+}
+
+func (s *Service) Summary(ctx context.Context) (float64, int64, error) {
+	average, total, err := s.repo.Summary(ctx)
+	if err != nil {
+		return 0, 0, apperror.Internal(err)
+	}
+	return average, total, nil
 }
 
 func (s *Service) findOwned(ctx context.Context, userID, id string) (*Review, error) {

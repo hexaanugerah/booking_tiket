@@ -20,6 +20,7 @@ type Repository interface {
 	ListByUser(ctx context.Context, userID string, offset, limit int) ([]Review, int64, error)
 	ListAll(ctx context.Context, status string, offset, limit int) ([]Review, int64, error)
 	ListApproved(ctx context.Context, offset, limit int) ([]Review, int64, error)
+	Summary(ctx context.Context) (float64, int64, error)
 	Update(ctx context.Context, review *Review) error
 	Delete(ctx context.Context, id string) error
 	DestinationExists(ctx context.Context, id string) (bool, error)
@@ -78,6 +79,20 @@ func (r *repository) ListAll(ctx context.Context, status string, offset, limit i
 func (r *repository) ListApproved(ctx context.Context, offset, limit int) ([]Review, int64, error) {
 	q := r.db.WithContext(ctx).Model(&Review{}).Where("is_approved = ?", true)
 	return r.list(q, offset, limit)
+}
+
+// Summary menghitung rata-rata rating dari seluruh ulasan yang tayang.
+func (r *repository) Summary(ctx context.Context) (float64, int64, error) {
+	var row struct {
+		Average float64
+		Total   int64
+	}
+	err := r.db.WithContext(ctx).
+		Model(&Review{}).
+		Select("COALESCE(AVG(rating), 0) AS average, COUNT(*) AS total").
+		Where("is_approved = ?", true).
+		Scan(&row).Error
+	return row.Average, row.Total, err
 }
 
 func (r *repository) list(q *gorm.DB, offset, limit int) ([]Review, int64, error) {
