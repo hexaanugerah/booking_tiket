@@ -19,6 +19,7 @@ import (
 	ttourismpackage "github.com/KawahPutih/backend/internal/domain/package"
 	"github.com/KawahPutih/backend/internal/domain/payments"
 	"github.com/KawahPutih/backend/internal/domain/public"
+	"github.com/KawahPutih/backend/internal/domain/review"
 	"github.com/KawahPutih/backend/internal/domain/role"
 	"github.com/KawahPutih/backend/internal/domain/ticketing"
 	"github.com/KawahPutih/backend/internal/domain/tickettype"
@@ -64,6 +65,7 @@ func NewRouter(app *bootstrap.App, log *zap.Logger) *gin.Engine {
 	analytics.RegisterRoutes(v1, app.AnalyticsHandler, app.JWTManager)
 	visitors.RegisterRoutes(v1, app.VisitorsHandler, app.JWTManager)
 	public.RegisterRoutes(v1, app.PublicHandler)
+	review.RegisterRoutes(v1, app.ReviewHandler, app.JWTManager)
 	verification.RegisterRoutes(v1, app.VerificationHandler, app.JWTManager)
 	destinationinfo.RegisterRoutes(v1, app.DestinationInfoHandler, app.JWTManager)
 	faq.RegisterRoutes(v1, app.FAQHandler, app.JWTManager)

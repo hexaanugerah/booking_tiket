@@ -17,6 +17,7 @@ import (
 	tourismpackage "github.com/KawahPutih/backend/internal/domain/package"
 	"github.com/KawahPutih/backend/internal/domain/payments"
 	publicdomain "github.com/KawahPutih/backend/internal/domain/public"
+	"github.com/KawahPutih/backend/internal/domain/review"
 	"github.com/KawahPutih/backend/internal/domain/role"
 	"github.com/KawahPutih/backend/internal/domain/ticketing"
 	"github.com/KawahPutih/backend/internal/domain/tickettype"
@@ -68,7 +69,7 @@ func migrateAndSeed(db *gorm.DB, log *zap.Logger) error {
 		&gallery.Item{},
 		&tickettype.TicketType{},
 		&destinationinfo.DestinationInfo{}, &faq.FAQ{}, &facility.Facility{}, &visitorrule.VisitorRule{},
-		&publicdomain.Destination{}, &publicdomain.Review{}, &publicdomain.Content{},
+		&publicdomain.Destination{}, &publicdomain.Review{}, &review.Review{}, &publicdomain.Content{},
 		&booking.Booking{}, &booking.BookingItem{},
 		&payments.Payment{}, &payments.PaymentDestination{},
 		&payments.PaymentSetting{}, &payments.PaymentMethodConfig{}, &payments.PaymentWebhookLog{},

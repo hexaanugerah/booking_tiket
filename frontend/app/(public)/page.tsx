@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Leaf, MapPin, Ticket, Clock } from "lucide-react";
 import { FaqAccordion } from "@/features/public/components/faq-accordion";
+import { HomeReviews } from "@/features/public/components/home-reviews";
 import {
   aboutHistory,
   aboutSections,
@@ -151,6 +152,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Ulasan Pengunjung */}
+      <HomeReviews />
 
       {/* FAQ */}
       <section className="page-shell py-14">

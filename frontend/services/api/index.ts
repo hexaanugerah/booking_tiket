@@ -13,3 +13,4 @@ export * from "../destination-info.service";
 export * from "../faq.service";
 export * from "../facility.service";
 export * from "../visitor-rule.service";
+export * from "../review.api.service";

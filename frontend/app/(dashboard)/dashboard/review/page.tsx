@@ -1,5 +1,8 @@
-import { ComingSoon } from "@/components/empty/coming-soon";
+import type { Metadata } from "next";
+import { ReviewManager } from "@/features/review/components/review-manager";
 
-export default function Page() {
-  return <ComingSoon feature="Halaman review" />;
+export const metadata: Metadata = { title: "Ulasan Saya" };
+
+export default function ReviewPage() {
+  return <ReviewManager />;
 }

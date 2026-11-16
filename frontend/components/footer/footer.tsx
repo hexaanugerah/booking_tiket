@@ -23,6 +23,7 @@ export function Footer() {
             <li><Link href="/" className="hover:text-[#1768ad]">Beranda</Link></li>
             <li><Link href="/packages" className="hover:text-[#1768ad]">Pilih Tiket</Link></li>
             <li><Link href="/gallery" className="hover:text-[#1768ad]">Galeri</Link></li>
+            <li><Link href="/review" className="hover:text-[#1768ad]">Ulasan</Link></li>
             <li><Link href="/articles" className="hover:text-[#1768ad]">Artikel</Link></li>
           </ul>
         </div>

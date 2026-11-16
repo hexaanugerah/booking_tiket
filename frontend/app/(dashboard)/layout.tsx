@@ -2,7 +2,7 @@
 
 import { useRouteGuard } from "@/hooks/use-route-guard";
 import { PanelLayout, type PanelLink } from "@/components/layout/panel-layout";
-import { History, LayoutDashboard, Settings, Ticket, TicketCheck, User, Wallet } from "lucide-react";
+import { History, LayoutDashboard, Settings, Star, Ticket, TicketCheck, User, Wallet } from "lucide-react";
 
 // Sidebar pengunjung — memakai kerangka panel yang sama dengan role lain.
 const LINKS: PanelLink[] = [
@@ -11,6 +11,7 @@ const LINKS: PanelLink[] = [
   { href: "/dashboard/ticket", label: "Tiket Saya", icon: TicketCheck },
   { href: "/dashboard/payment", label: "Pembayaran", icon: Wallet },
   { href: "/dashboard/history", label: "Riwayat", icon: History },
+  { href: "/dashboard/review", label: "Ulasan Saya", icon: Star },
   { href: "/dashboard/profile", label: "Profil", icon: User },
   { href: "/dashboard/setting", label: "Keamanan Akun", icon: Settings },
 ];

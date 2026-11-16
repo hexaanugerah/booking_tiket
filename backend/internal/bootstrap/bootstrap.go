@@ -17,6 +17,7 @@ import (
 	tourismpackage "github.com/KawahPutih/backend/internal/domain/package"
 	"github.com/KawahPutih/backend/internal/domain/payments"
 	"github.com/KawahPutih/backend/internal/domain/public"
+	"github.com/KawahPutih/backend/internal/domain/review"
 	"github.com/KawahPutih/backend/internal/domain/role"
 	"github.com/KawahPutih/backend/internal/domain/ticketing"
 	"github.com/KawahPutih/backend/internal/domain/tickettype"
@@ -61,6 +62,7 @@ type App struct {
 	VisitorsHandler           *visitors.Handler
 	AuditHandler              *audit.Handler
 	PublicHandler             *public.Handler
+	ReviewHandler             *review.Handler
 	VerificationHandler       *verification.Handler
 	DestinationInfoHandler    *destinationinfo.Handler
 	FAQHandler                *faq.Handler
@@ -166,6 +168,10 @@ func Build(cfg *config.Config, db *gorm.DB, log *zap.Logger) *App {
 	publicService := public.NewService(publicRepo, ticketTypeService)
 	publicHandler := public.NewHandler(publicService)
 
+	reviewRepo := review.NewRepository(db)
+	reviewService := review.NewService(reviewRepo)
+	reviewHandler := review.NewHandler(reviewService)
+
 	verificationRepo := verification.NewRepository(db)
 	verificationService := verification.NewService(verificationRepo, ticketingService)
 	verificationHandler := verification.NewHandler(verificationService)
@@ -182,10 +188,11 @@ func Build(cfg *config.Config, db *gorm.DB, log *zap.Logger) *App {
 		UploadDir:   cfg.Storage.UploadDir,
 		AuthHandler: authHandler, RoleHandler: roleHandler, UserHandler: userHandler,
 		ArticleHandler: articleHandler, GalleryHandler: galleryHandler, PackageHandler: packageHandler,
-		BookingHandler: bookingHandler, TicketHandler: ticketTypeHandler,		PaymentHandler: paymentsHandler, PaymentDestinationHandler: paymentsDestinationHandler,
+		BookingHandler: bookingHandler, TicketHandler: ticketTypeHandler, PaymentHandler: paymentsHandler, PaymentDestinationHandler: paymentsDestinationHandler,
 		PaymentSettingsHandler: paymentsSettingsHandler,
-		TicketingHandler:          ticketingHandler, AnalyticsHandler: analyticsHandler, VisitorsHandler: visitorsHandler,
-		AuditHandler: auditHandler, PublicHandler: publicHandler, VerificationHandler: verificationHandler,
+		TicketingHandler:       ticketingHandler, AnalyticsHandler: analyticsHandler, VisitorsHandler: visitorsHandler,
+		AuditHandler: auditHandler, PublicHandler: publicHandler, ReviewHandler: reviewHandler,
+		VerificationHandler:    verificationHandler,
 		DestinationInfoHandler: destinationInfoHandler, FAQHandler: faqHandler, FacilityHandler: facilityHandler,
 		VisitorRuleHandler: visitorRuleHandler,
 		JWTManager:         jwtManager, Sweeper: sweeper,
