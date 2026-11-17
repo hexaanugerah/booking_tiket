@@ -104,7 +104,9 @@ func (s *Service) StartPayment(ctx context.Context, bookingID string, amount int
 	if s.midtrans != nil && s.midtrans.Configured() {
 		snap, err := s.bookings.GetSnapshot(ctx, bookingID, "", true)
 		if err == nil && snap != nil {
-			s.ensureProviderPaymentData(ctx, p, snap.VisitorName, snap.Email)
+			// Saat booking dibuat, kegagalan gateway cukup dicatat: pengunjung
+			// masih bisa memilih metode lain di halaman pembayaran.
+			_ = s.ensureProviderPaymentData(ctx, p, snap.VisitorName, snap.Email)
 		}
 	}
 
@@ -112,34 +114,66 @@ func (s *Service) StartPayment(ctx context.Context, bookingID string, amount int
 }
 
 // ensureProviderPaymentData memastikan payment memiliki data provider
-// (QRIS qr_string atau Snap redirect URL) sesuai metodenya.
-func (s *Service) ensureProviderPaymentData(ctx context.Context, p *Payment, customerName, customerEmail string) {
+// (QRIS qr_string atau Snap redirect URL) sesuai metodenya. Error dikembalikan
+// agar pemanggil yang berjalan di jalur pembayaran bisa melaporkan penyebabnya
+// ke pengunjung, bukan menelan kegagalan charge secara diam-diam.
+func (s *Service) ensureProviderPaymentData(ctx context.Context, p *Payment, customerName, customerEmail string) error {
 	if s.midtrans == nil || !s.midtrans.Configured() {
-		return
+		return nil
 	}
 	if p.Method == MethodQRIS && p.QrisString == "" {
 		qrString, err := s.midtrans.CreateQRIS(ctx, p.MidtransOrderID, p.Amount)
 		if err != nil {
 			s.log.Error("midtrans create QRIS failed", zap.String("booking_id", p.BookingID), zap.Error(err))
-			return
+			return err
 		}
 		p.QrisString = qrString
 		if err := s.repo.Update(ctx, p); err != nil {
 			s.log.Error("midtrans qris string update failed", zap.String("booking_id", p.BookingID), zap.Error(err))
+			return err
 		}
-		return
+		return nil
 	}
 	if p.Method != MethodQRIS && p.MidtransRedirect == "" {
 		redirectURL, err := s.midtrans.CreateTransaction(ctx, p.MidtransOrderID, p.Amount, customerName, customerEmail, "Kawah Putih Booking")
 		if err != nil {
 			s.log.Error("midtrans create transaction failed", zap.String("booking_id", p.BookingID), zap.Error(err))
-			return
+			return err
 		}
 		p.MidtransRedirect = redirectURL
 		if err := s.repo.Update(ctx, p); err != nil {
 			s.log.Error("midtrans redirect url update failed", zap.String("booking_id", p.BookingID), zap.Error(err))
+			return err
 		}
 	}
+	return nil
+}
+
+// gatewayError membungkus kegagalan payment gateway menjadi error yang bisa
+// ditampilkan ke pengunjung. Tanpa ini, semua kegagalan gateway menjadi 500
+// dengan pesan generik sehingga penyebabnya tidak pernah terlihat.
+func gatewayError(action string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return apperror.New(apperror.KindUnavailable, fmt.Sprintf("%s: %v", action, err), err)
+}
+
+// providerChargeMissing menandai pembayaran yang masih menunggu tetapi transaksi
+// ke gateway belum berhasil dibuat (kredensial salah, channel mati, dsb).
+// Hanya dihitung saat gateway memang dikonfigurasi, supaya mode lokal yang
+// menyimulasikan pembayaran tidak memunculkan peringatan palsu.
+func (s *Service) providerChargeMissing(p *Payment) bool {
+	if s.env == "local" || s.midtrans == nil || !s.midtrans.Configured() {
+		return false
+	}
+	if p.Status != StatusPending && p.Status != StatusProcessing {
+		return false
+	}
+	if p.Method == MethodQRIS {
+		return strings.TrimSpace(p.QrisString) == ""
+	}
+	return strings.TrimSpace(p.MidtransRedirect) == ""
 }
 
 func (s *Service) ExpirePendingByBooking(ctx context.Context, bookingID string) error {
@@ -348,10 +382,6 @@ func (s *Service) Process(ctx context.Context, bookingID, requesterID string, pr
 		}
 	}
 
-	// Siapkan data provider untuk metode terpilih (QRIS string / Snap URL)
-	// agar frontend selalu punya cara pembayaran yang bisa ditampilkan.
-	s.ensureProviderPaymentData(ctx, pay, snap.VisitorName, snap.Email)
-
 	if time.Now().After(pay.ExpiredAt) {
 		outcome, err := s.expirePayment(ctx, pay)
 		if err != nil {
@@ -361,17 +391,23 @@ func (s *Service) Process(ctx context.Context, bookingID, requesterID string, pr
 		return resp, pay, outcome, nil
 	}
 
+	// Siapkan data provider untuk metode terpilih (QRIS string / Snap URL)
+	// agar frontend selalu punya cara pembayaran yang bisa ditampilkan.
+	if err := s.ensureProviderPaymentData(ctx, pay, snap.VisitorName, snap.Email); err != nil {
+		return nil, nil, "", gatewayError("Gateway pembayaran gagal membuat transaksi", err)
+	}
+
 	outcome := forced
 	if s.env != "local" {
 		if forced != "" {
 			return nil, nil, "", apperror.Validation("Status pembayaran harus ditentukan oleh Midtrans.")
 		}
 		if s.midtrans == nil {
-			return nil, nil, "", apperror.Internal(errors.New("midtrans gateway not configured"))
+			return nil, nil, "", gatewayError("Gateway pembayaran belum dikonfigurasi", errors.New("midtrans gateway not configured"))
 		}
 		providerStatus, fraudStatus, statusErr := s.midtrans.GetTransactionStatus(ctx, pay.MidtransOrderID)
 		if statusErr != nil {
-			return nil, nil, "", apperror.Internal(statusErr)
+			return nil, nil, "", gatewayError("Gateway pembayaran gagal memeriksa status transaksi", statusErr)
 		}
 		switch providerStatus {
 		case "capture", "settlement":
@@ -509,7 +545,10 @@ func (s *Service) GetDetail(ctx context.Context, bookingID, requesterID string, 
 	if _, err := s.bookings.GetSnapshot(ctx, bookingID, requesterID, privileged); err != nil {
 		return nil, err
 	}
-	detail := &PaymentDetail{toPaymentDTO(pay), nil, nil}
+	detail := &PaymentDetail{
+		PaymentDTO:            toPaymentDTO(pay),
+		ProviderChargeMissing: s.providerChargeMissing(pay),
+	}
 	if s.tickets != nil {
 		if t, _ := s.tickets.GetByBookingID(ctx, bookingID); t != nil {
 			detail.Ticket = t

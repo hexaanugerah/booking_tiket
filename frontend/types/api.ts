@@ -183,6 +183,8 @@ export interface Payment {
   /** Bukti pembayaran yang diunggah pengunjung. */
   proof_url?: string;
   proof_uploaded_at?: string;
+  /** True bila transaksi ke payment gateway gagal dibuat untuk pembayaran ini. */
+  provider_charge_missing?: boolean;
 }
 
 /** Konfigurasi kanal metode pembayaran yang diatur admin. */

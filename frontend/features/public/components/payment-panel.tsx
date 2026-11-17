@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import QRCode from "react-qr-code";
 import {
+  AlertTriangle,
   ArrowRight,
   Check,
   CheckCircle2,
@@ -477,6 +478,25 @@ export function PaymentPanel({ code }: { code?: string }) {
               ? "Pilih salah satu metode pembayaran yang tersedia."
               : `Metode: ${paymentMethodLabel(method)}`}
           </p>
+
+          {/* Peringatan dini: transaksi ke gateway gagal dibuat, jadi metode
+              otomatis tidak akan bisa diselesaikan walau tombol bayar diklik. */}
+          {phase === "WAITING" && payment?.provider_charge_missing && (
+            <div
+              role="alert"
+              className="mt-3 flex items-start gap-2 rounded-md border border-[#f0d9a8] bg-[#fdf3e3] px-3 py-2.5 text-[11px] leading-relaxed text-[#8a6420]"
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="font-bold text-[#7a5718]">Gateway pembayaran sedang tidak siap</p>
+                <p className="mt-0.5">
+                  Transaksi otomatis (QRIS, e-wallet, kartu) gagal dibuat oleh penyedia
+                  pembayaran. Silakan pilih transfer bank atau gerai retail, atau hubungi
+                  admin untuk menyelesaikan pembayaran.
+                </p>
+              </div>
+            </div>
+          )}
 
           {phase === "WAITING" && (
             <div className="mt-4 space-y-4">

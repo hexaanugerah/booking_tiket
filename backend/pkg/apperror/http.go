@@ -26,7 +26,9 @@ func WriteHTTP(c *gin.Context, err error) {
 	}
 
 	// Detail error hanya masuk log server; klien selalu menerima pesan yang aman.
-	if ae.Kind == KindInternal {
+	// Ketersediaan layanan luar (gateway pembayaran) tetap dicatat agar operator
+	// bisa melihat penyebabnya, meski pesannya juga dikirim ke klien.
+	if ae.Kind == KindInternal || ae.Kind == KindUnavailable {
 		serverError(c, ae.Code, ae.Err)
 	}
 
@@ -47,6 +49,8 @@ func WriteHTTP(c *gin.Context, err error) {
 		response.Unauthorized(c, ae.Message)
 	case KindForbidden:
 		response.Forbidden(c, ae.Message)
+	case KindUnavailable:
+		c.JSON(http.StatusServiceUnavailable, errorBody{Success: false, Message: ae.Message})
 	case KindRateLimited:
 		response.TooManyRequests(c, ae.Message)
 	default:
@@ -79,6 +83,8 @@ func statusFor(kind Kind) int {
 		return http.StatusUnauthorized
 	case KindForbidden:
 		return http.StatusForbidden
+	case KindUnavailable:
+		return http.StatusServiceUnavailable
 	case KindRateLimited:
 		return http.StatusTooManyRequests
 	default:

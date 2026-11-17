@@ -78,6 +78,10 @@ type PaymentDetail struct {
 	PaymentDTO
 	Ticket  *ticketing.TicketResponse `json:"ticket,omitempty"`
 	Booking *booking.BookingResponse  `json:"booking,omitempty"`
+	// ProviderChargeMissing true bila pembayaran masih menunggu tetapi transaksi
+	// ke payment gateway belum berhasil dibuat, sehingga metode otomatis
+	// (QRIS/e-wallet/kartu) tidak akan bisa diselesaikan.
+	ProviderChargeMissing bool `json:"provider_charge_missing"`
 }
 
 type ProcessResult struct {

@@ -12,6 +12,7 @@ const (
 	KindUnauthorized Kind = "unauthorized"
 	KindForbidden    Kind = "forbidden"
 	KindInternal     Kind = "internal"
+	KindUnavailable  Kind = "unavailable"
 	KindRateLimited  Kind = "rate_limited"
 )
 

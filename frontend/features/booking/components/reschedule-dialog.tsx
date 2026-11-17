@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { CalendarDays, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { addDaysISO, todayISO } from "@/lib/business";
+import { DatePicker } from "@/components/inputs/date-picker";
 import { rescheduleService } from "@/services/reschedule.api.service";
 import {
   ACTIVE_RESCHEDULE_STATUSES,
@@ -25,6 +26,9 @@ export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDial
   const [reason, setReason] = useState("");
   const [history, setHistory] = useState<Reschedule[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Tanggal hari ini disimpan di state agar batas minimal ikut bergerak
+  // (lewat tengah malam atau saat tab kembali aktif), bukan beku saat render.
+  const [today, setToday] = useState(todayISO);
 
   useEffect(() => {
     if (!booking) return;
@@ -47,9 +51,31 @@ export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDial
     };
   }, [booking]);
 
+  useEffect(() => {
+    const syncToday = () => {
+      const current = todayISO();
+      setToday((prev) => (prev === current ? prev : current));
+    };
+    const timer = window.setInterval(syncToday, 60_000);
+    window.addEventListener("focus", syncToday);
+    document.addEventListener("visibilitychange", syncToday);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", syncToday);
+      document.removeEventListener("visibilitychange", syncToday);
+    };
+  }, []);
+
+  // Batas jadwal ulang mengikuti backend: harus setelah hari ini (minimal besok).
+  const minimumDate = addDaysISO(today, 1);
+
+  // Jika hari berganti dan tanggal yang sudah dipilih jadi tidak valid, kosongkan.
+  useEffect(() => {
+    if (newDate && newDate < minimumDate) setNewDate("");
+  }, [minimumDate, newDate]);
+
   if (!booking) return null;
 
-  const minimumDate = addDaysISO(todayISO(), 1);
   const activeReschedules = (history ?? []).filter((item) =>
     ACTIVE_RESCHEDULE_STATUSES.includes(item.status)
   );
@@ -71,6 +97,12 @@ export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDial
     if (limitReached) {
       toast.error("Batas jadwal ulang tercapai", {
         description: `Maksimal ${MAX_RESCHEDULES_PER_BOOKING} kali per booking.`,
+      });
+      return;
+    }
+    if (!newDate || newDate < minimumDate) {
+      toast.error("Pilih tanggal kunjungan baru", {
+        description: "Tanggal baru minimal sehari setelah hari ini.",
       });
       return;
     }
@@ -166,13 +198,11 @@ export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDial
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
           <label className="block">
             <span className="text-xs font-semibold text-[#29445e]">Tanggal kunjungan baru</span>
-            <input
-              type="date"
+            <DatePicker
               value={newDate}
-              onChange={(event) => setNewDate(event.target.value)}
+              onChange={setNewDate}
               min={minimumDate}
-              required
-              className="mt-1 h-9 w-full rounded-md border border-[#d7e3ed] px-3 text-sm text-[#17324d] outline-none focus:border-[#1768ad]"
+              placeholder="Pilih tanggal kunjungan baru"
             />
           </label>
 
