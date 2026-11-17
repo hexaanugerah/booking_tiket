@@ -181,7 +181,7 @@ func Build(cfg *config.Config, db *gorm.DB, log *zap.Logger) *App {
 	refundHandler := refund.NewHandler(refundService)
 
 	rescheduleRepo := reschedule.NewRepository(db)
-	rescheduleService := reschedule.NewService(rescheduleRepo)
+	rescheduleService := reschedule.NewService(rescheduleRepo, mailerClient)
 	rescheduleHandler := reschedule.NewHandler(rescheduleService)
 
 	verificationRepo := verification.NewRepository(db)

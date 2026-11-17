@@ -34,6 +34,10 @@ func jsonFieldName(field string) string {
 		return "new_visit_date"
 	case "Reason":
 		return "reason"
+	case "Status":
+		return "status"
+	case "AdminNote":
+		return "admin_note"
 	default:
 		return strings.ToLower(field)
 	}
@@ -54,6 +58,10 @@ func friendlyMessage(fe validator.FieldError) string {
 		default:
 			return "Alasan jadwal ulang tidak valid."
 		}
+	case "Status":
+		return "Status jadwal ulang harus APPROVED atau REJECTED."
+	case "AdminNote":
+		return "Catatan admin maksimal 500 karakter."
 	default:
 		return "Nilai " + jsonFieldName(fe.Field()) + " tidak valid."
 	}

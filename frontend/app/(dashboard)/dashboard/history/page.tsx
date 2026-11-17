@@ -212,16 +212,9 @@ export default function MyHistoryPage() {
       <RescheduleDialog
         booking={rescheduleFor}
         onClose={() => setRescheduleFor(null)}
-        onSuccess={(newVisitDate) => {
-          if (rescheduleFor) {
-            setBookings((prev) =>
-              prev
-                ? prev.map((row) =>
-                    row.id === rescheduleFor.id ? { ...row, visit_date: newVisitDate } : row
-                  )
-                : prev
-            );
-          }
+        onSuccess={() => {
+          // Tanggal booking baru berubah setelah pengajuan disetujui admin,
+          // jadi halaman tidak mengubah visit_date secara optimistis.
           setRescheduleFor(null);
         }}
       />

@@ -14,4 +14,9 @@ func RegisterRoutes(rg *gin.RouterGroup, h *Handler, jwtManager *jwtutil.Manager
 	bookings.GET("/:id/reschedules", h.List)
 
 	rg.GET("/reschedules/mine", requireAuth, h.ListMine)
+
+	admin := rg.Group("/admin/reschedules", requireAuth, middleware.RequireRole("ADMIN", "super_admin"))
+	admin.GET("", h.ListAll)
+	admin.GET("/summary", h.Summary)
+	admin.PATCH("/:id/status", h.SetStatus)
 }

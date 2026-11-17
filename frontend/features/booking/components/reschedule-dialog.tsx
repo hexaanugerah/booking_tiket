@@ -5,16 +5,21 @@ import { CalendarDays, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { addDaysISO, todayISO } from "@/lib/business";
 import { rescheduleService } from "@/services/reschedule.api.service";
-import { MAX_RESCHEDULES_PER_BOOKING, type Reschedule } from "@/types/reschedule";
+import {
+  ACTIVE_RESCHEDULE_STATUSES,
+  MAX_RESCHEDULES_PER_BOOKING,
+  type Reschedule,
+} from "@/types/reschedule";
 import type { Booking } from "@/types/api";
 
 interface RescheduleDialogProps {
   booking: Booking | null;
   onClose: () => void;
-  onSuccess: (newVisitDate: string) => void;
+  onSuccess: () => void;
 }
 
-// Dialog ubah tanggal kunjungan dari halaman Riwayat pengunjung.
+// Dialog pengajuan ubah tanggal kunjungan dari halaman Riwayat pengunjung.
+// Tanggal booking baru berubah setelah pengajuan disetujui admin.
 export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDialogProps) {
   const [newDate, setNewDate] = useState("");
   const [reason, setReason] = useState("");
@@ -45,7 +50,11 @@ export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDial
   if (!booking) return null;
 
   const minimumDate = addDaysISO(todayISO(), 1);
-  const usedCount = history?.length ?? 0;
+  const activeReschedules = (history ?? []).filter((item) =>
+    ACTIVE_RESCHEDULE_STATUSES.includes(item.status)
+  );
+  const pendingRequest = history?.find((item) => item.status === "PENDING") ?? null;
+  const usedCount = activeReschedules.length;
   const limitReached =
     history !== null && usedCount >= MAX_RESCHEDULES_PER_BOOKING;
 
@@ -53,6 +62,12 @@ export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDial
     event.preventDefault();
     if (!booking) return;
 
+    if (pendingRequest) {
+      toast.error("Masih menunggu persetujuan", {
+        description: "Pengajuan sebelumnya belum diproses admin.",
+      });
+      return;
+    }
     if (limitReached) {
       toast.error("Batas jadwal ulang tercapai", {
         description: `Maksimal ${MAX_RESCHEDULES_PER_BOOKING} kali per booking.`,
@@ -72,12 +87,12 @@ export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDial
         new_visit_date: newDate,
         reason,
       });
-      toast.success("Jadwal kunjungan diubah", {
-        description: `Tanggal baru: ${newDate}`,
+      toast.success("Pengajuan jadwal ulang dikirim", {
+        description: `Tanggal ${newDate} menunggu persetujuan admin.`,
       });
-      onSuccess(newDate);
+      onSuccess();
     } catch (error: any) {
-      toast.error("Gagal mengubah jadwal", { description: error.message });
+      toast.error("Gagal mengajukan jadwal ulang", { description: error.message });
     } finally {
       setSubmitting(false);
     }
@@ -102,7 +117,7 @@ export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDial
             </span>
             <div>
               <h3 id="reschedule-dialog-title" className="text-base font-bold text-[#17324d]">
-                Jadwal Ulang Kunjungan
+                Ajukan Jadwal Ulang
               </h3>
               <p className="text-[11px] text-[#698097]">{booking.booking_code}</p>
             </div>
@@ -132,6 +147,14 @@ export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDial
             .
           </p>
         </div>
+
+        {pendingRequest && (
+          <p className="mt-2 rounded-md bg-[#fdf3e3] px-3 py-2 text-[11px] leading-relaxed text-[#8a6420]">
+            Pengajuan ke tanggal{" "}
+            <span className="font-semibold">{pendingRequest.new_visit_date}</span> masih
+            menunggu persetujuan admin. Ajukan lagi setelah pengajuan ini diproses.
+          </p>
+        )}
 
         {limitReached && (
           <p className="mt-2 rounded-md bg-[#fdeaea] px-3 py-2 text-[11px] text-[#c53030]">
@@ -168,8 +191,8 @@ export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDial
           </label>
 
           <p className="rounded-md bg-[#fdf3e3] px-3 py-2 text-[11px] leading-relaxed text-[#8a6420]">
-            Jadwal ulang hanya dapat dilakukan sebelum tanggal kunjungan dan
-            tergantung ketersediaan kuota tiket pada tanggal baru.
+            Pengajuan akan ditinjau admin. Tanggal kunjungan baru berlaku setelah
+            disetujui dan tergantung ketersediaan kuota tiket pada tanggal tersebut.
           </p>
 
           <div className="flex justify-end gap-2 pt-1">
@@ -182,11 +205,11 @@ export function RescheduleDialog({ booking, onClose, onSuccess }: RescheduleDial
             </button>
             <button
               type="submit"
-              disabled={submitting || limitReached}
+              disabled={submitting || limitReached || pendingRequest !== null}
               className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#1768ad] px-4 text-sm font-semibold text-white hover:bg-[#14548f] disabled:opacity-60"
             >
               {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Simpan Jadwal
+              Kirim Pengajuan
             </button>
           </div>
         </form>

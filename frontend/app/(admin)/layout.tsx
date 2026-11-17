@@ -6,6 +6,7 @@ import { PanelLayout, type PanelLink } from "@/components/layout/panel-layout";
 import {
   Banknote,
   Bell,
+  CalendarClock,
   ChartNoAxesColumnIncreasing,
   History,
   LayoutDashboard,
@@ -31,6 +32,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/bookings", label: "Kelola Booking", icon: ReceiptText },
     { href: "/admin/payments", label: "Kelola Pembayaran", icon: Wallet },
     { href: "/admin/refunds", label: "Pengembalian Dana", icon: Banknote },
+    { href: "/admin/reschedules", label: "Jadwal Ulang", icon: CalendarClock },
     { href: "/admin/visitors", label: "Kelola Pengunjung", icon: Users },
     { href: "/admin/users", label: "Kelola Petugas", icon: Users },
     { href: "/admin/content", label: "Kelola Konten", icon: Layers },

@@ -8,11 +8,23 @@ import { RescheduleDialog } from "@/features/booking/components/reschedule-dialo
 import { bookingService } from "@/services/booking.api.service";
 import { rescheduleService } from "@/services/reschedule.api.service";
 import { todayISO } from "@/lib/business";
-import { MAX_RESCHEDULES_PER_BOOKING, type Reschedule } from "@/types/reschedule";
+import {
+  ACTIVE_RESCHEDULE_STATUSES,
+  MAX_RESCHEDULES_PER_BOOKING,
+  RESCHEDULE_STATUS_LABEL,
+  type Reschedule,
+  type RescheduleStatus,
+} from "@/types/reschedule";
 import type { Booking } from "@/types/api";
 
-// Jadwal Ulang — pengunjung dapat memindahkan tanggal kunjungan tanpa
-// membuat booking baru. Maksimal 2 kali per booking dan tergantung kuota.
+const STATUS_CLASS: Record<RescheduleStatus, string> = {
+  PENDING: "bg-[#fdf3e3] text-[#b7791f]",
+  APPROVED: "bg-[#e6f7f0] text-[#16876a]",
+  REJECTED: "bg-[#fdeaea] text-[#c53030]",
+};
+
+// Jadwal Ulang — pengunjung dapat mengajukan pemindahan tanggal kunjungan.
+// Maksimal 2 kali per booking, menunggu persetujuan admin, dan tergantung kuota.
 export default function MyReschedulePage() {
   const [bookings, setBookings] = useState<Booking[] | null>(null);
   const [reschedules, setReschedules] = useState<Reschedule[]>([]);
@@ -50,7 +62,16 @@ export default function MyReschedulePage() {
   const countByBooking = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of reschedules) {
+      if (!ACTIVE_RESCHEDULE_STATUSES.includes(item.status)) continue;
       map.set(item.booking_id, (map.get(item.booking_id) ?? 0) + 1);
+    }
+    return map;
+  }, [reschedules]);
+
+  const pendingByBooking = useMemo(() => {
+    const map = new Map<string, Reschedule>();
+    for (const item of reschedules) {
+      if (item.status === "PENDING") map.set(item.booking_id, item);
     }
     return map;
   }, [reschedules]);
@@ -119,6 +140,7 @@ export default function MyReschedulePage() {
           <div className="grid gap-3 md:grid-cols-2">
             {eligibleBookings.map((booking) => {
               const used = countByBooking.get(booking.id) ?? 0;
+              const pending = pendingByBooking.get(booking.id) ?? null;
               const limitReached = used >= MAX_RESCHEDULES_PER_BOOKING;
 
               return (
@@ -147,14 +169,25 @@ export default function MyReschedulePage() {
                     </span>
                   </div>
 
+                  {pending && (
+                    <p className="mt-2 rounded-md bg-[#fdf3e3] px-2 py-1.5 text-[10px] leading-relaxed text-[#8a6420]">
+                      Menunggu persetujuan admin untuk tanggal{" "}
+                      <span className="font-semibold">{pending.new_visit_date}</span>.
+                    </p>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setSelected(booking)}
-                    disabled={limitReached}
+                    disabled={limitReached || pending !== null}
                     className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-[#1768ad] px-3 text-xs font-semibold text-white hover:bg-[#14548f] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <CalendarClock className="h-3.5 w-3.5" />
-                    {limitReached ? "Jatah Jadwal Ulang Habis" : "Jadwalkan Ulang"}
+                    {pending
+                      ? "Menunggu Persetujuan"
+                      : limitReached
+                        ? "Jatah Jadwal Ulang Habis"
+                        : "Ajukan Jadwal Ulang"}
                   </button>
                 </div>
               );
@@ -207,9 +240,16 @@ export default function MyReschedulePage() {
                       <p className="line-clamp-2 text-[11px] text-[#29445e]">{item.reason}</p>
                     </td>
                     <td>
-                      <span className="inline-block rounded-full bg-[#e6f7f0] px-2 py-0.5 text-[10px] font-bold text-[#16876a]">
-                        Berhasil
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_CLASS[item.status]}`}
+                      >
+                        {RESCHEDULE_STATUS_LABEL[item.status]}
                       </span>
+                      {item.admin_note && (
+                        <p className="mt-1 max-w-[200px] text-[10px] leading-relaxed text-[#698097]">
+                          {item.admin_note}
+                        </p>
+                      )}
                     </td>
                     <td className="text-[11px] text-[#698097]">
                       {formatDate(item.created_at)}

@@ -22,7 +22,7 @@ type BookingSnapshot struct {
 	Email       string
 	VisitDate   string
 	Status      string
-	Items       []Item
+	Items       []Item `gorm:"-"`
 }
 
 type TicketCapacity struct {
@@ -31,19 +31,36 @@ type TicketCapacity struct {
 	IsActive bool
 }
 
+// Record menggabungkan pengajuan dengan data booking untuk tampilan admin.
 type Record struct {
 	Reschedule
-	BookingCode string
+	BookingCode   string
+	VisitorName   string
+	Email         string
+	VisitDate     string
+	BookingStatus string
+}
+
+type Summary struct {
+	Pending  int64
+	Approved int64
+	Rejected int64
 }
 
 type Repository interface {
 	FindBooking(ctx context.Context, bookingID string) (*BookingSnapshot, error)
-	CountByBooking(ctx context.Context, bookingID string) (int64, error)
-	ListByBooking(ctx context.Context, bookingID string) ([]Reschedule, error)
+	CountActiveByBooking(ctx context.Context, bookingID string) (int64, error)
+	HasPendingByBooking(ctx context.Context, bookingID string) (bool, error)
+	FindByID(ctx context.Context, id string) (*Record, error)
+	ListByBooking(ctx context.Context, bookingID string) ([]Record, error)
 	ListByUser(ctx context.Context, userID string, offset, limit int) ([]Record, int64, error)
+	ListAll(ctx context.Context, status string, offset, limit int) ([]Record, int64, error)
+	Summary(ctx context.Context) (Summary, error)
 	TicketCapacities(ctx context.Context, ticketIDs []string) (map[string]TicketCapacity, error)
 	SoldByTicketOn(ctx context.Context, date, excludeBookingID string) (map[string]int64, error)
-	CreateAndApply(ctx context.Context, item *Reschedule) error
+	Create(ctx context.Context, item *Reschedule) error
+	Update(ctx context.Context, item *Reschedule) error
+	Approve(ctx context.Context, item *Reschedule) error
 }
 
 type repository struct {
@@ -52,6 +69,17 @@ type repository struct {
 
 func NewRepository(db *gorm.DB) Repository {
 	return &repository{db: db}
+}
+
+const recordSelect = `booking_reschedules.*, bookings.booking_code AS booking_code,
+	bookings.visitor_name AS visitor_name, bookings.email AS email,
+	bookings.visit_date AS visit_date, bookings.status AS booking_status`
+
+func (r *repository) recordQuery(ctx context.Context) *gorm.DB {
+	return r.db.WithContext(ctx).
+		Table("booking_reschedules").
+		Joins("LEFT JOIN bookings ON bookings.id = booking_reschedules.booking_id AND bookings.deleted_at IS NULL").
+		Where("booking_reschedules.deleted_at IS NULL")
 }
 
 func (r *repository) FindBooking(ctx context.Context, bookingID string) (*BookingSnapshot, error) {
@@ -81,26 +109,53 @@ func (r *repository) FindBooking(ctx context.Context, bookingID string) (*Bookin
 	return &row, nil
 }
 
-func (r *repository) CountByBooking(ctx context.Context, bookingID string) (int64, error) {
+// CountActiveByBooking menghitung pengajuan yang masih menunggu atau sudah
+// disetujui. Pengajuan yang ditolak tidak memakai jatah jadwal ulang.
+func (r *repository) CountActiveByBooking(ctx context.Context, bookingID string) (int64, error) {
 	var total int64
 	err := r.db.WithContext(ctx).
 		Model(&Reschedule{}).
-		Where("booking_id = ?", bookingID).
+		Where("booking_id = ? AND status IN ?", bookingID, []string{StatusPending, StatusApproved}).
 		Count(&total).Error
 	return total, err
 }
 
-func (r *repository) ListByBooking(ctx context.Context, bookingID string) ([]Reschedule, error) {
-	var items []Reschedule
+func (r *repository) HasPendingByBooking(ctx context.Context, bookingID string) (bool, error) {
+	var total int64
 	err := r.db.WithContext(ctx).
-		Where("booking_id = ?", bookingID).
-		Order("created_at DESC").
-		Find(&items).Error
+		Model(&Reschedule{}).
+		Where("booking_id = ? AND status = ?", bookingID, StatusPending).
+		Count(&total).Error
+	return total > 0, err
+}
+
+func (r *repository) FindByID(ctx context.Context, id string) (*Record, error) {
+	var row Record
+	err := r.recordQuery(ctx).
+		Select(recordSelect).
+		Where("booking_reschedules.id = ?", id).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (r *repository) ListByBooking(ctx context.Context, bookingID string) ([]Record, error) {
+	var items []Record
+	err := r.recordQuery(ctx).
+		Select(recordSelect).
+		Where("booking_reschedules.booking_id = ?", bookingID).
+		Order("booking_reschedules.created_at DESC").
+		Scan(&items).Error
 	return items, err
 }
 
-// ListByUser mengambil seluruh riwayat jadwal ulang milik pengunjung,
-// lengkap dengan kode booking untuk ditampilkan di panel pengunjung.
+// ListByUser mengambil seluruh riwayat pengajuan milik pengunjung, lengkap
+// dengan kode booking untuk ditampilkan di panel pengunjung.
 func (r *repository) ListByUser(ctx context.Context, userID string, offset, limit int) ([]Record, int64, error) {
 	var total int64
 	if err := r.db.WithContext(ctx).
@@ -111,16 +166,51 @@ func (r *repository) ListByUser(ctx context.Context, userID string, offset, limi
 	}
 
 	var items []Record
-	err := r.db.WithContext(ctx).
-		Table("booking_reschedules").
-		Select("booking_reschedules.*, bookings.booking_code AS booking_code").
-		Joins("LEFT JOIN bookings ON bookings.id = booking_reschedules.booking_id AND bookings.deleted_at IS NULL").
-		Where("booking_reschedules.user_id = ? AND booking_reschedules.deleted_at IS NULL", userID).
+	err := r.recordQuery(ctx).
+		Select(recordSelect).
+		Where("booking_reschedules.user_id = ?", userID).
 		Order("booking_reschedules.created_at DESC").
 		Offset(offset).
 		Limit(limit).
 		Scan(&items).Error
 	return items, total, err
+}
+
+func (r *repository) ListAll(ctx context.Context, status string, offset, limit int) ([]Record, int64, error) {
+	countQuery := r.db.WithContext(ctx).
+		Table("booking_reschedules").
+		Where("booking_reschedules.deleted_at IS NULL")
+	query := r.recordQuery(ctx)
+	if status != "" {
+		countQuery = countQuery.Where("booking_reschedules.status = ?", status)
+		query = query.Where("booking_reschedules.status = ?", status)
+	}
+
+	var total int64
+	if err := countQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var items []Record
+	err := query.
+		Select(recordSelect).
+		Order("booking_reschedules.created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Scan(&items).Error
+	return items, total, err
+}
+
+func (r *repository) Summary(ctx context.Context) (Summary, error) {
+	var row Summary
+	err := r.db.WithContext(ctx).
+		Table("booking_reschedules").
+		Select(`COALESCE(SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END), 0) AS pending,
+			COALESCE(SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END), 0) AS approved,
+			COALESCE(SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END), 0) AS rejected`).
+		Where("deleted_at IS NULL").
+		Scan(&row).Error
+	return row, err
 }
 
 func (r *repository) TicketCapacities(ctx context.Context, ticketIDs []string) (map[string]TicketCapacity, error) {
@@ -167,30 +257,57 @@ func (r *repository) SoldByTicketOn(ctx context.Context, date, excludeBookingID 
 	return out, nil
 }
 
-func (r *repository) CreateAndApply(ctx context.Context, item *Reschedule) error {
+func (r *repository) Create(ctx context.Context, item *Reschedule) error {
+	return r.db.WithContext(ctx).Create(item).Error
+}
+
+func (r *repository) Update(ctx context.Context, item *Reschedule) error {
+	return r.db.WithContext(ctx).Save(item).Error
+}
+
+// Approve menerapkan tanggal baru ke booking dan e-tiket dalam satu transaksi.
+// Pengajuan hanya bisa disetujui bila statusnya masih PENDING dan tanggal
+// booking belum berubah sejak pengajuan dibuat.
+func (r *repository) Approve(ctx context.Context, item *Reschedule) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(item).Error; err != nil {
-			return err
-		}
-		result := tx.Table("bookings").
-			Where("id = ? AND user_id = ? AND status IN ?", item.BookingID, item.UserID, []string{"PAID", "CONFIRMED"}).
+		now := time.Now()
+
+		result := tx.Model(&Reschedule{}).
+			Where("id = ? AND status = ?", item.ID, StatusPending).
 			Updates(map[string]interface{}{
-				"visit_date": item.NewVisitDate,
-				"updated_at": time.Now(),
+				"status":       StatusApproved,
+				"admin_note":   item.AdminNote,
+				"processed_by": item.ProcessedBy,
+				"processed_at": now,
+				"updated_at":   now,
 			})
 		if result.Error != nil {
 			return result.Error
 		}
 		if result.RowsAffected == 0 {
-			return ErrBookingNotEligible
+			return ErrInvalidTransition
 		}
+
+		result = tx.Table("bookings").
+			Where("id = ? AND visit_date = ? AND status IN ?", item.BookingID, item.OldVisitDate, []string{"PAID", "CONFIRMED"}).
+			Updates(map[string]interface{}{
+				"visit_date": item.NewVisitDate,
+				"updated_at": now,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrBookingChanged
+		}
+
 		// E-tiket menyimpan tanggal kunjungan sendiri, jadi ikut diperbarui
 		// agar tanggal pada tiket tidak berbeda dengan booking.
 		return tx.Table("tickets").
 			Where("booking_id = ?", item.BookingID).
 			Updates(map[string]interface{}{
 				"visit_date": item.NewVisitDate,
-				"updated_at": time.Now(),
+				"updated_at": now,
 			}).Error
 	})
 }

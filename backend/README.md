@@ -10,6 +10,8 @@
 6. Start the API with `go run ./cmd/server`. It uses the configured MySQL database and runs schema migrations and seed data at startup.
 7. Run the automated checks with `go test ./...`. Unit tests use isolated in-memory SQLite databases and do not connect to MySQL.
 
+Data demo berisi 8 booking dua minggu terakhir beserta pembayaran, e-tiket, dan ulasan dibuat otomatis di luar `APP_ENV=production`. Set `SEED_DEMO_BOOKINGS=false` untuk mematikannya, atau `true` untuk tetap membuatnya di production.
+
 ## Staging and production
 
 Set `APP_ENV` to `staging` or `production`, then configure the JWT secrets, `MIDTRANS_SERVER_KEY`, and MySQL connection values in the deployment environment. Production requires `MIDTRANS_IS_PRODUCTION=true`; the API fails during startup if required secrets or database settings are missing. The schema migration and seed routine run during startup.

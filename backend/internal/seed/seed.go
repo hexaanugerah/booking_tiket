@@ -2,6 +2,7 @@ package seed
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -14,12 +15,15 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/KawahPutih/backend/internal/domain/article"
+	"github.com/KawahPutih/backend/internal/domain/booking"
 	"github.com/KawahPutih/backend/internal/domain/destinationinfo"
 	"github.com/KawahPutih/backend/internal/domain/faq"
 	"github.com/KawahPutih/backend/internal/domain/facility"
 	tourismpackage "github.com/KawahPutih/backend/internal/domain/package"
 	"github.com/KawahPutih/backend/internal/domain/payments"
+	"github.com/KawahPutih/backend/internal/domain/review"
 	"github.com/KawahPutih/backend/internal/domain/role"
+	"github.com/KawahPutih/backend/internal/domain/ticketing"
 	"github.com/KawahPutih/backend/internal/domain/tickettype"
 	"github.com/KawahPutih/backend/internal/domain/visitorrule"
 )
@@ -51,6 +55,9 @@ func Run(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 	}
 	if err := seedVisitorRules(ctx, db); err != nil {
 		return fmt.Errorf("seed visitor rules: %w", err)
+	}
+	if err := seedDemoBookings(ctx, db); err != nil {
+		return fmt.Errorf("seed demo bookings: %w", err)
 	}
 	// Seeder galeri sengaja TIDAK dipasang: galeri harus mulai kosong.
 	if err := seedPaymentDestinations(ctx, db); err != nil {
@@ -498,4 +505,238 @@ func seedVisitorRules(ctx context.Context, db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+type demoVisitor struct {
+	Name, Email, Phone string
+}
+
+type demoBookingSpec struct {
+	Code        string
+	Visitor     int
+	TicketCode  string
+	Quantity    int
+	OffsetDays  int
+	VisitTime   string
+	CreatedHour int
+	CreatedMin  int
+	Method      string
+	Rating      int
+	Comment     string
+}
+
+// demoSeedEnabled menyalakan data demo booking/ulasan secara default di luar
+// production. Set SEED_DEMO_BOOKINGS=false untuk mematikan, atau true untuk
+// tetap membuatnya di production.
+func demoSeedEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("SEED_DEMO_BOOKINGS"))) {
+	case "true", "1":
+		return true
+	case "false", "0":
+		return false
+	}
+	return !strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production")
+}
+
+// seedDemoBookings mengisi riwayat booking dua minggu terakhir beserta
+// pembayaran, e-tiket, dan satu ulasan per booking. Setiap booking memakai
+// jenis tiket dan jumlah berbeda sehingga nominalnya bervariasi. Seeder ini
+// idempoten: bila sudah ada booking berkode KP-DEMO-*, tidak ada yang dibuat.
+func seedDemoBookings(ctx context.Context, db *gorm.DB) error {
+	if !demoSeedEnabled() {
+		return nil
+	}
+
+	var count int64
+	if err := db.WithContext(ctx).Model(&booking.Booking{}).
+		Where("booking_code LIKE ?", "KP-DEMO-%").
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	visitors := []demoVisitor{
+		{"Bagas Pratama", "bagas.pratama@example.com", "081311220011"},
+		{"Nabila Rahmawati", "nabila.rahma@example.com", "081322330022"},
+		{"Rizky Maulana", "rizky.maulana@example.com", "081333440033"},
+		{"Intan Permata Sari", "intan.permata@example.com", "081344550044"},
+		{"Fajar Nugroho", "fajar.nugroho@example.com", "081355660055"},
+		{"Salsabila Putri", "salsa.putri@example.com", "081366770066"},
+		{"Dimas Aryo Wibowo", "dimas.aryo@example.com", "081377880077"},
+		{"Melati Kusuma", "melati.kusuma@example.com", "081388990088"},
+	}
+
+	specs := []demoBookingSpec{
+		{
+			Code: "KP-DEMO-01", Visitor: 0, TicketCode: "HTM-WNI-REG", Quantity: 2,
+			OffsetDays: 13, VisitTime: "07:20", CreatedHour: 19, CreatedMin: 42, Method: payments.MethodQRIS,
+			Rating: 5,
+			Comment: "Pemandangannya bagus banget, apalagi pas pagi masih ada kabutnya. Tukang foto di area kawah ramah dan harganya wajar. Cuma jalannya agak licin jadi hati-hati.",
+		},
+		{
+			Code: "KP-DEMO-02", Visitor: 1, TicketCode: "HTM-WNA-REG", Quantity: 1,
+			OffsetDays: 12, VisitTime: "08:45", CreatedHour: 20, CreatedMin: 15, Method: payments.MethodBCAVA,
+			Rating: 4,
+			Comment: "Tiket gampang dibeli online dan masuknya nggak ribet. Pas datang agak ramai jadi parkirnya agak jauh. Overall worth it buat liburan keluarga.",
+		},
+		{
+			Code: "KP-DEMO-03", Visitor: 2, TicketCode: "HTM-WNI-SUNRISE", Quantity: 3,
+			OffsetDays: 10, VisitTime: "09:10", CreatedHour: 9, CreatedMin: 5, Method: payments.MethodGoPay,
+			Rating: 3,
+			Comment: "Tempatnya oke, tapi pas saya datang kabutnya tebal jadi kawahnya nggak begitu kelihatan. Toilet bersih, warungnya juga lumayan lengkap.",
+		},
+		{
+			Code: "KP-DEMO-04", Visitor: 3, TicketCode: "LHKP-REG", Quantity: 1,
+			OffsetDays: 8, VisitTime: "07:05", CreatedHour: 16, CreatedMin: 48, Method: payments.MethodDANA,
+			Rating: 5,
+			Comment: "Anak-anak senang banget bisa naik kuda dan lihat kawah langsung. Petugasnya sabar jawab pertanyaan. Bakal balik lagi kalau ke Bandung.",
+		},
+		{
+			Code: "KP-DEMO-05", Visitor: 4, TicketCode: "ONTANG-ANTING", Quantity: 2,
+			OffsetDays: 7, VisitTime: "13:30", CreatedHour: 21, CreatedMin: 10, Method: payments.MethodQRIS,
+			Rating: 4,
+			Comment: "Suka sama suasananya, dingin dan tenang. Minusnya sinyal susah dan antre shuttle lumayan lama pas sore.",
+		},
+		{
+			Code: "KP-DEMO-06", Visitor: 5, TicketCode: "PREWEDDING", Quantity: 1,
+			OffsetDays: 5, VisitTime: "10:15", CreatedHour: 11, CreatedMin: 33, Method: payments.MethodMandiriVA,
+			Rating: 2,
+			Comment: "Sayang pas kesini hujan, jalanan jadi becek dan agak susah lewat. Mungkin lain kali coba lagi pas cuaca bagus.",
+		},
+		{
+			Code: "KP-DEMO-07", Visitor: 6, TicketCode: "VEHICLE-RODA4", Quantity: 3,
+			OffsetDays: 3, VisitTime: "15:00", CreatedHour: 6, CreatedMin: 58, Method: payments.MethodOVO,
+			Rating: 4,
+			Comment: "Danau kawahnya unik, warnanya benar-benar putih kehijauan. Datang jam 8 masih sepi jadi puas foto-foto.",
+		},
+		{
+			Code: "KP-DEMO-08", Visitor: 7, TicketCode: "KUDA-TUNGGANG", Quantity: 2,
+			OffsetDays: 1, VisitTime: "08:30", CreatedHour: 18, CreatedMin: 22, Method: payments.MethodShopeePay,
+			Rating: 5,
+			Comment: "Pelayanannya cepat, e-tiket langsung bisa dipakai scan. Kopi di kafetaria enak, cocok buat hangat-hangat setelah keliling.",
+		},
+	}
+
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		loc := now.Location()
+
+		userIDs := make([]string, len(visitors))
+		for i, visitor := range visitors {
+			var existing userRow
+			err := tx.Where("email = ?", visitor.Email).Take(&existing).Error
+			switch {
+			case err == nil:
+				userIDs[i] = existing.ID
+				continue
+			case !errors.Is(err, gorm.ErrRecordNotFound):
+				return err
+			}
+
+			row := userRow{
+				ID: uuid.NewString(), CreatedAt: now.AddDate(0, 0, -60), UpdatedAt: now.AddDate(0, 0, -60),
+				Name: visitor.Name, Email: visitor.Email, Phone: visitor.Phone,
+				IsActive: true, IsVerified: true,
+			}
+			if err := tx.Create(&row).Error; err != nil {
+				return err
+			}
+			userIDs[i] = row.ID
+
+			var roleRow struct{ ID string }
+			if err := tx.Table("roles").Select("id").Where("name = ?", role.RolePengunjung).Scan(&roleRow).Error; err != nil {
+				return err
+			}
+			if roleRow.ID != "" {
+				if err := tx.Exec("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", row.ID, roleRow.ID).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		for _, spec := range specs {
+			var ticket tickettype.TicketType
+			if err := tx.Where("code = ?", spec.TicketCode).First(&ticket).Error; err != nil {
+				return fmt.Errorf("ticket type %s: %w", spec.TicketCode, err)
+			}
+
+			visitor := visitors[spec.Visitor]
+			visitDay := now.AddDate(0, 0, -spec.OffsetDays)
+			y, m, d := visitDay.Date()
+			visitDate := time.Date(y, m, d, 0, 0, 0, 0, loc)
+			visitDateStr := visitDate.Format("2006-01-02")
+			createdAt := visitDate.AddDate(0, 0, -2).
+				Add(time.Duration(spec.CreatedHour)*time.Hour + time.Duration(spec.CreatedMin)*time.Minute)
+			paidAt := createdAt.Add(7 * time.Minute)
+
+			hm, err := time.Parse("15:04", spec.VisitTime)
+			if err != nil {
+				return fmt.Errorf("visit time %s: %w", spec.VisitTime, err)
+			}
+			arrival := time.Date(y, m, d, hm.Hour(), hm.Minute(), 0, 0, loc)
+
+			total := ticket.Price * int64(spec.Quantity)
+			bookingID := uuid.NewString()
+			b := booking.Booking{
+				Base:        booking.Base{ID: bookingID, CreatedAt: createdAt, UpdatedAt: createdAt},
+				BookingCode: spec.Code, UserID: userIDs[spec.Visitor],
+				VisitorName: visitor.Name, Email: visitor.Email, Phone: visitor.Phone,
+				VisitDate: visitDateStr,
+				Note:      fmt.Sprintf("Rencana datang pukul %s WIB.", spec.VisitTime),
+				Status:    booking.StatusUsed,
+				Subtotal:  total, Total: total, TotalTickets: spec.Quantity,
+				CheckedInAt: &arrival, CheckedInGate: "Gerbang 1",
+			}
+			if err := tx.Create(&b).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&booking.BookingItem{
+				Base:      booking.Base{ID: uuid.NewString(), CreatedAt: createdAt, UpdatedAt: createdAt},
+				BookingID: bookingID, TicketID: ticket.ID, TicketName: ticket.Name,
+				Price: ticket.Price, Quantity: spec.Quantity,
+			}).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Create(&payments.Payment{
+				Base:      payments.Base{ID: uuid.NewString(), CreatedAt: createdAt, UpdatedAt: createdAt},
+				BookingID: bookingID, Provider: payments.ProviderMidtrans, Method: spec.Method,
+				Reference: "DEMO-PAY-" + spec.Code, MidtransOrderID: "DEMO-ORDER-" + spec.Code, Amount: total,
+				Status: payments.StatusPaid, SettlementStatus: payments.SettlementSettled,
+				PaidAt: &paidAt, ExpiredAt: createdAt.Add(payments.PaymentWindow),
+			}).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Create(&ticketing.Ticket{
+				Base:        ticketing.Base{ID: uuid.NewString(), CreatedAt: paidAt, UpdatedAt: paidAt},
+				BookingID:   bookingID, BookingCode: spec.Code,
+				VisitorName: visitor.Name, Email: visitor.Email, VisitDate: visitDateStr,
+				TicketName: ticket.Name, Quantity: spec.Quantity, Total: total,
+				Status: ticketing.TicketUsed, GeneratedAt: paidAt,
+				CheckedInAt: &arrival, CheckedInGate: "Gerbang 1",
+				QRData: "DEMO-QR-" + spec.Code,
+			}).Error; err != nil {
+				return err
+			}
+
+			reviewedAt := visitDate.AddDate(0, 0, 1).
+				Add(19*time.Hour + time.Duration((spec.OffsetDays*13)%40)*time.Minute)
+			reviewBookingID := bookingID
+			if err := tx.Create(&review.Review{
+				Base:       review.Base{ID: uuid.NewString(), CreatedAt: reviewedAt, UpdatedAt: reviewedAt},
+				UserID:     userIDs[spec.Visitor],
+				BookingID:  &reviewBookingID,
+				Rating:     spec.Rating,
+				Comment:    spec.Comment,
+				Status:     review.StatusApproved,
+				IsApproved: true,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
