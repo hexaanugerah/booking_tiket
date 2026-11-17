@@ -17,8 +17,8 @@ import (
 	"github.com/KawahPutih/backend/internal/domain/article"
 	"github.com/KawahPutih/backend/internal/domain/booking"
 	"github.com/KawahPutih/backend/internal/domain/destinationinfo"
-	"github.com/KawahPutih/backend/internal/domain/faq"
 	"github.com/KawahPutih/backend/internal/domain/facility"
+	"github.com/KawahPutih/backend/internal/domain/faq"
 	tourismpackage "github.com/KawahPutih/backend/internal/domain/package"
 	"github.com/KawahPutih/backend/internal/domain/payments"
 	"github.com/KawahPutih/backend/internal/domain/review"
@@ -538,22 +538,41 @@ func demoSeedEnabled() bool {
 	return !strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production")
 }
 
-// seedDemoBookings mengisi riwayat booking dua minggu terakhir beserta
-// pembayaran, e-tiket, dan satu ulasan per booking. Setiap booking memakai
-// jenis tiket dan jumlah berbeda sehingga nominalnya bervariasi. Seeder ini
-// idempoten: bila sudah ada booking berkode KP-DEMO-*, tidak ada yang dibuat.
+// clearDemoBookings menghapus booking demo lama (KP-DEMO-*) beserta data turunannya,
+// supaya seeder bisa membuat ulang set data demo yang lebih lengkap.
+func clearDemoBookings(ctx context.Context, db *gorm.DB) error {
+	const demoCodePattern = "KP-DEMO-%"
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		sub := "SELECT id FROM bookings WHERE booking_code LIKE ?"
+		steps := []struct {
+			query string
+			args  []interface{}
+		}{
+			{"DELETE FROM reviews WHERE booking_id IN (" + sub + ")", []interface{}{demoCodePattern}},
+			{"DELETE FROM payments WHERE booking_id IN (" + sub + ")", []interface{}{demoCodePattern}},
+			{"DELETE FROM tickets WHERE booking_id IN (" + sub + ")", []interface{}{demoCodePattern}},
+			{"DELETE FROM booking_reschedules WHERE booking_id IN (" + sub + ")", []interface{}{demoCodePattern}},
+			{"DELETE FROM booking_items WHERE booking_id IN (" + sub + ")", []interface{}{demoCodePattern}},
+			{"DELETE FROM bookings WHERE booking_code LIKE ?", []interface{}{demoCodePattern}},
+		}
+		for _, step := range steps {
+			if err := tx.Exec(step.query, step.args...).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// seedDemoBookings mengisi riwayat booking satu bulan terakhir beserta
+// pembayaran, e-tiket, dan satu ulasan per booking: 31 booking dengan nama
+// pengunjung, tanggal kunjungan, jam datang, jenis tiket, jumlah, dan nominal
+// yang berbeda-beda. Rating ulasan pun bervariasi (1-5) dan teksnya ditulis
+// dengan gaya bahasa sehari-hari. Seeder ini idempoten: bila jumlah booking
+// KP-DEMO-* sudah lengkap, tidak ada yang dibuat. Bila masih memakai data demo
+// lama yang jumlahnya kurang, data demo lama dibersihkan dan dibuat ulang.
 func seedDemoBookings(ctx context.Context, db *gorm.DB) error {
 	if !demoSeedEnabled() {
-		return nil
-	}
-
-	var count int64
-	if err := db.WithContext(ctx).Model(&booking.Booking{}).
-		Where("booking_code LIKE ?", "KP-DEMO-%").
-		Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
 		return nil
 	}
 
@@ -566,57 +585,233 @@ func seedDemoBookings(ctx context.Context, db *gorm.DB) error {
 		{"Salsabila Putri", "salsa.putri@example.com", "081366770066"},
 		{"Dimas Aryo Wibowo", "dimas.aryo@example.com", "081377880077"},
 		{"Melati Kusuma", "melati.kusuma@example.com", "081388990088"},
+		{"Hendra Gunawan", "hendra.gunawan@example.com", "081399110099"},
+		{"Yuni Astuti", "yuni.astuti@example.com", "081311221133"},
+		{"Agus Setiawan", "agus.setiawan@example.com", "081322331144"},
+		{"Dewi Lestari", "dewi.lestari@example.com", "081333441155"},
+		{"Bayu Saputra", "bayu.saputra@example.com", "081344551166"},
+		{"Putri Ayu Lestari", "putri.ayu@example.com", "081355661177"},
+		{"Arif Hidayat", "arif.hidayat@example.com", "081366771188"},
+		{"Sri Wahyuni", "sri.wahyuni@example.com", "081377881199"},
+		{"Doni Firmansyah", "doni.firmansyah@example.com", "081388991100"},
+		{"Rina Marlina", "rina.marlina@example.com", "081399111122"},
+		{"Wahyu Ramadhan", "wahyu.ramadhan@example.com", "081311222233"},
+		{"Fitri Handayani", "fitri.handayani@example.com", "081322332244"},
+		{"Eko Prasetyo", "eko.prasetyo@example.com", "081333442255"},
+		{"Aisyah Nur Fadilah", "aisyah.nur@example.com", "081344552266"},
+		{"Reza Aditya", "reza.aditya@example.com", "081355662277"},
+		{"Mega Puspita", "mega.puspita@example.com", "081366772288"},
+		{"Andi Kurniawan", "andi.kurniawan@example.com", "081377882299"},
+		{"Lia Amelia", "lia.amelia@example.com", "081388992200"},
+		{"Yusuf Maulana", "yusuf.maulana@example.com", "081399112233"},
+		{"Citra Kirana", "citra.kirana@example.com", "081311223344"},
+		{"Bambang Sutrisno", "bambang.sutrisno@example.com", "081322334455"},
+		{"Nadia Safitri", "nadia.safitri@example.com", "081333445566"},
+		{"Gilang Ramadhan", "gilang.ramadhan@example.com", "081344556677"},
 	}
 
 	specs := []demoBookingSpec{
 		{
 			Code: "KP-DEMO-01", Visitor: 0, TicketCode: "HTM-WNI-REG", Quantity: 2,
-			OffsetDays: 13, VisitTime: "07:20", CreatedHour: 19, CreatedMin: 42, Method: payments.MethodQRIS,
-			Rating: 5,
-			Comment: "Pemandangannya bagus banget, apalagi pas pagi masih ada kabutnya. Tukang foto di area kawah ramah dan harganya wajar. Cuma jalannya agak licin jadi hati-hati.",
+			OffsetDays: 30, VisitTime: "07:20", CreatedHour: 19, CreatedMin: 42, Method: payments.MethodQRIS,
+			Rating:  5,
+			Comment: "Pemandangan bagus banget, apalagi pas pagi masih ada kabutnya. Tukang foto di area kawah ramah dan harganya wajar. Cuma jalannya agak licin jadi hati-hati.",
 		},
 		{
 			Code: "KP-DEMO-02", Visitor: 1, TicketCode: "HTM-WNA-REG", Quantity: 1,
-			OffsetDays: 12, VisitTime: "08:45", CreatedHour: 20, CreatedMin: 15, Method: payments.MethodBCAVA,
-			Rating: 4,
-			Comment: "Tiket gampang dibeli online dan masuknya nggak ribet. Pas datang agak ramai jadi parkirnya agak jauh. Overall worth it buat liburan keluarga.",
+			OffsetDays: 29, VisitTime: "08:45", CreatedHour: 20, CreatedMin: 15, Method: payments.MethodBCAVA,
+			Rating:  4,
+			Comment: "Tiket gampang dibeli online dan masuknya nggak ribet. Pas dateng agak ramai jadi parkirnya jauh. Overall worth it buat liburan keluarga.",
 		},
 		{
 			Code: "KP-DEMO-03", Visitor: 2, TicketCode: "HTM-WNI-SUNRISE", Quantity: 3,
-			OffsetDays: 10, VisitTime: "09:10", CreatedHour: 9, CreatedMin: 5, Method: payments.MethodGoPay,
-			Rating: 3,
-			Comment: "Tempatnya oke, tapi pas saya datang kabutnya tebal jadi kawahnya nggak begitu kelihatan. Toilet bersih, warungnya juga lumayan lengkap.",
+			OffsetDays: 28, VisitTime: "09:10", CreatedHour: 9, CreatedMin: 5, Method: payments.MethodGoPay,
+			Rating:  3,
+			Comment: "Tempatnya oke, tapi pas saya datang kabutnya tebel jadi kawahnya nggak begitu keliatan. Toilet bersih, warungnya juga lumayan lengkap.",
 		},
 		{
 			Code: "KP-DEMO-04", Visitor: 3, TicketCode: "LHKP-REG", Quantity: 1,
-			OffsetDays: 8, VisitTime: "07:05", CreatedHour: 16, CreatedMin: 48, Method: payments.MethodDANA,
-			Rating: 5,
-			Comment: "Anak-anak senang banget bisa naik kuda dan lihat kawah langsung. Petugasnya sabar jawab pertanyaan. Bakal balik lagi kalau ke Bandung.",
+			OffsetDays: 27, VisitTime: "07:05", CreatedHour: 16, CreatedMin: 48, Method: payments.MethodDANA,
+			Rating:  5,
+			Comment: "Anak-anak seneng banget bisa naik kuda dan lihat kawah langsung. Petugasnya sabar jawab pertanyaan. Bakal balik lagi kalau ke Bandung.",
 		},
 		{
 			Code: "KP-DEMO-05", Visitor: 4, TicketCode: "ONTANG-ANTING", Quantity: 2,
-			OffsetDays: 7, VisitTime: "13:30", CreatedHour: 21, CreatedMin: 10, Method: payments.MethodQRIS,
-			Rating: 4,
-			Comment: "Suka sama suasananya, dingin dan tenang. Minusnya sinyal susah dan antre shuttle lumayan lama pas sore.",
+			OffsetDays: 26, VisitTime: "13:30", CreatedHour: 21, CreatedMin: 10, Method: payments.MethodQRIS,
+			Rating:  4,
+			Comment: "Suka sama suasananya, dingin dan tenang. Minusnya sinyal susah sama antre shuttle lumayan lama pas sore.",
 		},
 		{
 			Code: "KP-DEMO-06", Visitor: 5, TicketCode: "PREWEDDING", Quantity: 1,
-			OffsetDays: 5, VisitTime: "10:15", CreatedHour: 11, CreatedMin: 33, Method: payments.MethodMandiriVA,
-			Rating: 2,
-			Comment: "Sayang pas kesini hujan, jalanan jadi becek dan agak susah lewat. Mungkin lain kali coba lagi pas cuaca bagus.",
+			OffsetDays: 25, VisitTime: "10:15", CreatedHour: 11, CreatedMin: 33, Method: payments.MethodMandiriVA,
+			Rating:  2,
+			Comment: "Sayang pas kesini hujan, jalanan jadi becek dan susah dilewatin. Mungkin lain kali coba lagi pas cuaca bagus.",
 		},
 		{
 			Code: "KP-DEMO-07", Visitor: 6, TicketCode: "VEHICLE-RODA4", Quantity: 3,
-			OffsetDays: 3, VisitTime: "15:00", CreatedHour: 6, CreatedMin: 58, Method: payments.MethodOVO,
-			Rating: 4,
-			Comment: "Danau kawahnya unik, warnanya benar-benar putih kehijauan. Datang jam 8 masih sepi jadi puas foto-foto.",
+			OffsetDays: 24, VisitTime: "15:00", CreatedHour: 6, CreatedMin: 58, Method: payments.MethodOVO,
+			Rating:  4,
+			Comment: "Danau kawahnya unik, warnanya beneran putih kehijauan. Datang jam 8 masih sepi jadi puas foto-foto.",
 		},
 		{
 			Code: "KP-DEMO-08", Visitor: 7, TicketCode: "KUDA-TUNGGANG", Quantity: 2,
-			OffsetDays: 1, VisitTime: "08:30", CreatedHour: 18, CreatedMin: 22, Method: payments.MethodShopeePay,
-			Rating: 5,
-			Comment: "Pelayanannya cepat, e-tiket langsung bisa dipakai scan. Kopi di kafetaria enak, cocok buat hangat-hangat setelah keliling.",
+			OffsetDays: 23, VisitTime: "08:30", CreatedHour: 18, CreatedMin: 22, Method: payments.MethodShopeePay,
+			Rating:  5,
+			Comment: "Pelayanannya cepet, e-tiket langsung bisa dipake scan. Kopi di kafetaria enak, cocok buat hangat-hangat abis keliling.",
 		},
+		{
+			Code: "KP-DEMO-09", Visitor: 8, TicketCode: "PANAHAN", Quantity: 4,
+			OffsetDays: 22, VisitTime: "11:40", CreatedHour: 20, CreatedMin: 3, Method: payments.MethodDANA,
+			Rating:  4,
+			Comment: "Panahannya seru buat anak smp, peralatannya masih bagus. Instruktur sempet telat dateng tapi gapapa.",
+		},
+		{
+			Code: "KP-DEMO-10", Visitor: 9, TicketCode: "SUNAN-IBU", Quantity: 2,
+			OffsetDays: 21, VisitTime: "14:20", CreatedHour: 8, CreatedMin: 17, Method: payments.MethodBNIVA,
+			Rating:  3,
+			Comment: "Sampai sunan ibu jam 2 siang, matahari lagi panas jadi kurang nyaman. Viewnya tetep bagus sih.",
+		},
+		{
+			Code: "KP-DEMO-11", Visitor: 10, TicketCode: "JEMBATAN-APUNG", Quantity: 5,
+			OffsetDays: 20, VisitTime: "07:45", CreatedHour: 21, CreatedMin: 55, Method: payments.MethodQRIS,
+			Rating:  5,
+			Comment: "Jembatan apungnya bikin deg-degan tapi seru. Anak kedua malah nangis takut wkwk. Petugas gerbang 2 cepet.",
+		},
+		{
+			Code: "KP-DEMO-12", Visitor: 11, TicketCode: "SKYWALK-CANOPY", Quantity: 2,
+			OffsetDays: 19, VisitTime: "12:05", CreatedHour: 7, CreatedMin: 26, Method: payments.MethodAlfamart,
+			Rating:  4,
+			Comment: "Skywalk-nya pendek tapi viewnya lumayan. 17rb masih masuk akal. Foto dari atas bagus.",
+		},
+		{
+			Code: "KP-DEMO-13", Visitor: 12, TicketCode: "HTM-WNA-SUNRISE", Quantity: 2,
+			OffsetDays: 18, VisitTime: "16:10", CreatedHour: 22, CreatedMin: 9, Method: payments.MethodGoPay,
+			Rating:  1,
+			Comment: "Kecewa, tiket sunrise kita ketinggalan gara-gara macet dari jakarta. Datang jam 9 udah nggak boleh ikut sunrise katanya. Di web juga nggak ada info jelas soal batas jamnya.",
+		},
+		{
+			Code: "KP-DEMO-14", Visitor: 13, TicketCode: "SHOOTING", Quantity: 1,
+			OffsetDays: 17, VisitTime: "08:00", CreatedHour: 13, CreatedMin: 31, Method: payments.MethodBCAVA,
+			Rating:  5,
+			Comment: "Sewa shooting buat video klien, hasilnya memuaskan. Tim lokasi bantu atur tempat sama lighting. Mahal tapi sepadan.",
+		},
+		{
+			Code: "KP-DEMO-15", Visitor: 14, TicketCode: "VEHICLE-RODA6", Quantity: 2,
+			OffsetDays: 16, VisitTime: "09:35", CreatedHour: 19, CreatedMin: 44, Method: payments.MethodMandiriVA,
+			Rating:  3,
+			Comment: "Roda 6 bayarnya 48rb per kendaraan. Bus kita masuknya lancar, cuma area putar baliknya sempit.",
+		},
+		{
+			Code: "KP-DEMO-16", Visitor: 15, TicketCode: "HELM-STORAGE", Quantity: 3,
+			OffsetDays: 15, VisitTime: "10:50", CreatedHour: 6, CreatedMin: 12, Method: payments.MethodOVO,
+			Rating:  4,
+			Comment: "Nitip helm 3rb doang, aman kok. Karcisnya dikasih gantungan, gampang diambil lagi.",
+		},
+		{
+			Code: "KP-DEMO-17", Visitor: 16, TicketCode: "JASA-FOTOGRAFER", Quantity: 2,
+			OffsetDays: 14, VisitTime: "13:15", CreatedHour: 20, CreatedMin: 38, Method: payments.MethodShopeePay,
+			Rating:  5,
+			Comment: "Fotografernya sabar dan hasilnya bagus. Dapet banyak foto keluarga, editnya rapi.",
+		},
+		{
+			Code: "KP-DEMO-18", Visitor: 17, TicketCode: "LHKP-SUNRISE", Quantity: 2,
+			OffsetDays: 13, VisitTime: "07:30", CreatedHour: 9, CreatedMin: 21, Method: payments.MethodDANA,
+			Rating:  2,
+			Comment: "Pesan LHKP sunrise buat 2 orang, ternyata guide-nya baru dateng jam 6 lebih. Jam segitu sunrise udah lewat.",
+		},
+		{
+			Code: "KP-DEMO-19", Visitor: 18, TicketCode: "ONTANG-ANTING-SUNRISE", Quantity: 3,
+			OffsetDays: 12, VisitTime: "08:20", CreatedHour: 21, CreatedMin: 2, Method: payments.MethodBRIVA,
+			Rating:  4,
+			Comment: "Kuda sunrise oke, anak seneng. Kuda yang satu agak males jalan jadi harus dipandu terus.",
+		},
+		{
+			Code: "KP-DEMO-20", Visitor: 19, TicketCode: "HTM-WNI-REG", Quantity: 6,
+			OffsetDays: 11, VisitTime: "09:05", CreatedHour: 17, CreatedMin: 47, Method: payments.MethodIndomaret,
+			Rating:  5,
+			Comment: "Bawa 6 orang sekeluarga, rombongan besar diurus cepet. Petugasnya ramah dan ngarahin ke toilet yang bersih.",
+		},
+		{
+			Code: "KP-DEMO-21", Visitor: 20, TicketCode: "VEHICLE-RODA2", Quantity: 4,
+			OffsetDays: 10, VisitTime: "11:15", CreatedHour: 7, CreatedMin: 54, Method: payments.MethodQRIS,
+			Rating:  3,
+			Comment: "Naik motor bertiga kena 4 tiket kendaraan. Jalannya naik tajam, motor matic mesti hati-hati.",
+		},
+		{
+			Code: "KP-DEMO-22", Visitor: 21, TicketCode: "KUDA-TUNGGANG", Quantity: 4,
+			OffsetDays: 9, VisitTime: "14:00", CreatedHour: 19, CreatedMin: 19, Method: payments.MethodBCAVA,
+			Rating:  5,
+			Comment: "Kuda tunggang paling seru yang pernah saya coba. Jalurnya muter cukup panjang, pelananya bersih.",
+		},
+		{
+			Code: "KP-DEMO-23", Visitor: 22, TicketCode: "SUNAN-IBU", Quantity: 6,
+			OffsetDays: 8, VisitTime: "09:55", CreatedHour: 22, CreatedMin: 41, Method: payments.MethodGoPay,
+			Rating:  4,
+			Comment: "Sunan ibu enak buat sarapan. Kopi susunya enak, tapi tiket 15rb per orang kerasa agak mahal buat cuma duduk.",
+		},
+		{
+			Code: "KP-DEMO-24", Visitor: 23, TicketCode: "JEMBATAN-APUNG", Quantity: 3,
+			OffsetDays: 7, VisitTime: "12:30", CreatedHour: 6, CreatedMin: 36, Method: payments.MethodMandiriVA,
+			Rating:  2,
+			Comment: "Jembatan apungnya tutup sebagian pas kami kesana, jadi cuma bisa foto dikit. Nggak ada pengumuman apa-apa di loket.",
+		},
+		{
+			Code: "KP-DEMO-25", Visitor: 24, TicketCode: "HTM-WNA-REG", Quantity: 3,
+			OffsetDays: 6, VisitTime: "16:20", CreatedHour: 20, CreatedMin: 7, Method: payments.MethodOVO,
+			Rating:  4,
+			Comment: "Ada tamu dari malaysia, HTM mancanegara 90rb per orang. Kawahnya mereka suka, tapi mau bayar pake qris ribet.",
+		},
+		{
+			Code: "KP-DEMO-26", Visitor: 25, TicketCode: "PANAHAN", Quantity: 2,
+			OffsetDays: 5, VisitTime: "07:10", CreatedHour: 11, CreatedMin: 28, Method: payments.MethodShopeePay,
+			Rating:  5,
+			Comment: "Antri panahan cuma sebentar, panahnya masih baru. Anak puas banget.",
+		},
+		{
+			Code: "KP-DEMO-27", Visitor: 26, TicketCode: "SKYWALK-CANOPY", Quantity: 4,
+			OffsetDays: 4, VisitTime: "10:40", CreatedHour: 21, CreatedMin: 13, Method: payments.MethodBNIVA,
+			Rating:  3,
+			Comment: "Skywalk keren buat foto, cuma antri 20 menit lebih. Panas juga karena nggak ada tempat teduh.",
+		},
+		{
+			Code: "KP-DEMO-28", Visitor: 27, TicketCode: "HELM-STORAGE", Quantity: 5,
+			OffsetDays: 3, VisitTime: "13:50", CreatedHour: 8, CreatedMin: 4, Method: payments.MethodAlfamart,
+			Rating:  4,
+			Comment: "Helm 5 orang dititipin, bayar 15rb. Nggak ada tukang parkir yang jaga tapi aman.",
+		},
+		{
+			Code: "KP-DEMO-29", Visitor: 28, TicketCode: "VEHICLE-RODA4", Quantity: 6,
+			OffsetDays: 2, VisitTime: "08:55", CreatedHour: 19, CreatedMin: 50, Method: payments.MethodQRIS,
+			Rating:  5,
+			Comment: "Parkir mobil 18rb, areanya luas. Bangun pagi dateng jam 7, kabut masih tebel, suasananya bagus banget.",
+		},
+		{
+			Code: "KP-DEMO-30", Visitor: 29, TicketCode: "HTM-WNI-SUNRISE", Quantity: 2,
+			OffsetDays: 1, VisitTime: "11:25", CreatedHour: 20, CreatedMin: 33, Method: payments.MethodDANA,
+			Rating:  4,
+			Comment: "Sunrise tiket 46rb per orang. Agak mahal tapi pemandangan matahari terbitnya nggak sia-sia.",
+		},
+		{
+			Code: "KP-DEMO-31", Visitor: 30, TicketCode: "HTM-WNI-REG", Quantity: 4,
+			OffsetDays: 0, VisitTime: "07:15", CreatedHour: 6, CreatedMin: 45, Method: payments.MethodBCAVA,
+			Rating:  4,
+			Comment: "Beli 4 tiket buat keluarga, semuanya lancar. Loket online gampang, scan di gerbang cepet.",
+		},
+	}
+
+	var count int64
+	if err := db.WithContext(ctx).Model(&booking.Booking{}).
+		Where("booking_code LIKE ?", "KP-DEMO-%").
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count >= int64(len(specs)) {
+		return nil
+	}
+	if count > 0 {
+		if err := clearDemoBookings(ctx, db); err != nil {
+			return err
+		}
 	}
 
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -711,8 +906,8 @@ func seedDemoBookings(ctx context.Context, db *gorm.DB) error {
 			}
 
 			if err := tx.Create(&ticketing.Ticket{
-				Base:        ticketing.Base{ID: uuid.NewString(), CreatedAt: paidAt, UpdatedAt: paidAt},
-				BookingID:   bookingID, BookingCode: spec.Code,
+				Base:      ticketing.Base{ID: uuid.NewString(), CreatedAt: paidAt, UpdatedAt: paidAt},
+				BookingID: bookingID, BookingCode: spec.Code,
 				VisitorName: visitor.Name, Email: visitor.Email, VisitDate: visitDateStr,
 				TicketName: ticket.Name, Quantity: spec.Quantity, Total: total,
 				Status: ticketing.TicketUsed, GeneratedAt: paidAt,
@@ -724,6 +919,9 @@ func seedDemoBookings(ctx context.Context, db *gorm.DB) error {
 
 			reviewedAt := visitDate.AddDate(0, 0, 1).
 				Add(19*time.Hour + time.Duration((spec.OffsetDays*13)%40)*time.Minute)
+			if reviewedAt.After(now) {
+				reviewedAt = now.Add(-time.Duration(30+spec.CreatedMin) * time.Minute)
+			}
 			reviewBookingID := bookingID
 			if err := tx.Create(&review.Review{
 				Base:       review.Base{ID: uuid.NewString(), CreatedAt: reviewedAt, UpdatedAt: reviewedAt},
