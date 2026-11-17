@@ -4,6 +4,7 @@ import { useRouteGuard } from "@/hooks/use-route-guard";
 import { useAuditFeed } from "@/hooks/use-audit";
 import { PanelLayout, type PanelLink } from "@/components/layout/panel-layout";
 import {
+  Banknote,
   Bell,
   ChartNoAxesColumnIncreasing,
   History,
@@ -29,6 +30,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/tickets", label: "Kelola Tiket", icon: Ticket },
     { href: "/admin/bookings", label: "Kelola Booking", icon: ReceiptText },
     { href: "/admin/payments", label: "Kelola Pembayaran", icon: Wallet },
+    { href: "/admin/refunds", label: "Pengembalian Dana", icon: Banknote },
     { href: "/admin/visitors", label: "Kelola Pengunjung", icon: Users },
     { href: "/admin/users", label: "Kelola Petugas", icon: Users },
     { href: "/admin/content", label: "Kelola Konten", icon: Layers },

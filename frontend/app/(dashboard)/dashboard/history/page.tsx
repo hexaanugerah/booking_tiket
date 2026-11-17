@@ -5,8 +5,12 @@ import Link from "next/link";
 import { History } from "lucide-react";
 import { PageHeader, SectionCard, StatusPill } from "@/components/panel/panel-ui";
 import { bookingService } from "@/services/booking.api.service";
-import { rupiah } from "@/lib/business";
+import { refundService } from "@/services/refund.api.service";
+import { RefundRequestDialog } from "@/features/refund/components/refund-request-dialog";
+import { RescheduleDialog } from "@/features/booking/components/reschedule-dialog";
+import { rupiah, todayISO } from "@/lib/business";
 import type { Booking, BookingStatus } from "@/types/api";
+import { REFUND_STATUS_LABEL, type Refund } from "@/types/refund";
 
 // Riwayat kunjungan — semua booking pengunjung, terbaru lebih dulu.
 // Status diambil langsung dari backend sehingga konsisten dengan tiket.
@@ -22,7 +26,11 @@ const STATUS_ID: Record<BookingStatus, string> = {
 
 export default function MyHistoryPage() {
   const [bookings, setBookings] = useState<Booking[] | null>(null);
+  const [refunds, setRefunds] = useState<Refund[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [refundFor, setRefundFor] = useState<Booking | null>(null);
+  const [rescheduleFor, setRescheduleFor] = useState<Booking | null>(null);
+  const [refundRefreshKey, setRefundRefreshKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -39,11 +47,40 @@ export default function MyHistoryPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    refundService
+      .listMine()
+      .then((rows) => {
+        if (alive) setRefunds(rows);
+      })
+      .catch(() => {
+        // Status refund bersifat tambahan; riwayat booking tetap bisa dipakai.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [refundRefreshKey]);
+
   const rows = useMemo(
     () =>
       [...(bookings ?? [])].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? "")),
     [bookings]
   );
+
+  // Backend mengurutkan refund terbaru lebih dulu, jadi entri pertama per
+  // booking adalah pengajuan yang paling relevan untuk ditampilkan.
+  const refundByBooking = useMemo(() => {
+    const map = new Map<string, Refund>();
+    for (const refund of refunds) {
+      if (!map.has(refund.booking_id)) map.set(refund.booking_id, refund);
+    }
+    return map;
+  }, [refunds]);
+
+  const today = todayISO();
+  const canModify = (booking: Booking) =>
+    (booking.status === "PAID" || booking.status === "CONFIRMED") && booking.visit_date > today;
 
   if (bookings === null) {
     return (
@@ -88,41 +125,106 @@ export default function MyHistoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((b) => (
-                  <tr key={b.id}>
-                    <td className="font-medium text-[#17324d]">{b.booking_code}</td>
-                    <td className="tabular-nums">{b.visit_date}</td>
-                    <td className="tabular-nums">{b.total_tickets}</td>
-                    <td className="tabular-nums">{rupiah(b.total)}</td>
-                    <td>
-                      <StatusPill status={STATUS_ID[b.status] ?? b.status} />
-                    </td>
-                    <td>
-                      {["PAID", "CONFIRMED", "USED"].includes(b.status) ? (
-                        <Link
-                          href={`/e-ticket?code=${b.id}`}
-                          className="font-semibold text-[#1768ad] hover:underline"
-                        >
-                          E-Tiket
-                        </Link>
-                      ) : b.status === "PENDING" ? (
-                        <Link
-                          href={`/payment?code=${b.id}`}
-                          className="font-semibold text-[#1768ad] hover:underline"
-                        >
-                          Bayar
-                        </Link>
-                      ) : (
-                        <span className="text-[#94A3B8]">-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((b) => {
+                  const hasTicket = ["PAID", "CONFIRMED", "USED"].includes(b.status);
+                  const canPay = b.status === "PENDING";
+                  const modify = canModify(b);
+                  const latestRefund = refundByBooking.get(b.id);
+                  const hasActiveRefund =
+                    latestRefund?.status === "PENDING" || latestRefund?.status === "APPROVED";
+
+                  return (
+                    <tr key={b.id}>
+                      <td className="font-medium text-[#17324d]">{b.booking_code}</td>
+                      <td className="tabular-nums">{b.visit_date}</td>
+                      <td className="tabular-nums">{b.total_tickets}</td>
+                      <td className="tabular-nums">{rupiah(b.total)}</td>
+                      <td>
+                        <StatusPill status={STATUS_ID[b.status] ?? b.status} />
+                        {latestRefund && (
+                          <p className="mt-1 text-[10px] font-semibold text-[#698097]">
+                            Refund: {REFUND_STATUS_LABEL[latestRefund.status]} ·{" "}
+                            {rupiah(latestRefund.amount)}
+                          </p>
+                        )}
+                      </td>
+                      <td>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          {hasTicket && (
+                            <Link
+                              href={`/e-ticket?code=${b.id}`}
+                              className="font-semibold text-[#1768ad] hover:underline"
+                            >
+                              E-Tiket
+                            </Link>
+                          )}
+                          {canPay && (
+                            <Link
+                              href={`/payment?code=${b.id}`}
+                              className="font-semibold text-[#1768ad] hover:underline"
+                            >
+                              Bayar
+                            </Link>
+                          )}
+                          {modify && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setRescheduleFor(b)}
+                                className="font-semibold text-[#b7791f] hover:underline"
+                              >
+                                Reschedule
+                              </button>
+                              {!hasActiveRefund && (
+                                <button
+                                  type="button"
+                                  onClick={() => setRefundFor(b)}
+                                  className="font-semibold text-[#c53030] hover:underline"
+                                >
+                                  Refund
+                                </button>
+                              )}
+                            </>
+                          )}
+                          {!hasTicket && !canPay && !modify && (
+                            <span className="text-[#94A3B8]">-</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </SectionCard>
+
+      <RefundRequestDialog
+        booking={refundFor}
+        onClose={() => setRefundFor(null)}
+        onSuccess={() => {
+          setRefundFor(null);
+          setRefundRefreshKey((key) => key + 1);
+        }}
+      />
+
+      <RescheduleDialog
+        booking={rescheduleFor}
+        onClose={() => setRescheduleFor(null)}
+        onSuccess={(newVisitDate) => {
+          if (rescheduleFor) {
+            setBookings((prev) =>
+              prev
+                ? prev.map((row) =>
+                    row.id === rescheduleFor.id ? { ...row, visit_date: newVisitDate } : row
+                  )
+                : prev
+            );
+          }
+          setRescheduleFor(null);
+        }}
+      />
     </div>
   );
 }

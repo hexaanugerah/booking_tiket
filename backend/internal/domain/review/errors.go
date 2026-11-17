@@ -9,6 +9,10 @@ var (
 	ErrCommentTooLong  = apperror.Validation("Ulasan maksimal 1000 karakter.")
 	ErrInvalidStatus   = apperror.Validation("Status ulasan tidak valid.")
 
+	// Filter daftar ulasan publik.
+	ErrInvalidRatingFilter = apperror.Validation("Filter rating harus berada di antara 1 sampai 5.")
+	ErrInvalidSort         = apperror.Validation("Urutan ulasan tidak valid.")
+
 	ErrBookingRequired    = apperror.Validation("Booking wajib dipilih.")
 	ErrBookingNotFound    = apperror.NotFound("Booking tidak ditemukan.")
 	ErrBookingNotOwned    = apperror.Forbidden("Booking ini bukan milik Anda.")

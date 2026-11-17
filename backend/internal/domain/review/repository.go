@@ -7,6 +7,18 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	SortNewest     = "newest"
+	SortRatingDesc = "rating_desc"
+	SortRatingAsc  = "rating_asc"
+)
+
+// ListApprovedOptions adalah filter halaman publik. Rating 0 berarti semua.
+type ListApprovedOptions struct {
+	Rating int
+	Sort   string
+}
+
 type BookingSnapshot struct {
 	ID     string
 	UserID string
@@ -20,7 +32,7 @@ type Repository interface {
 	FindByBookingIDUnscoped(ctx context.Context, bookingID string) (*Review, error)
 	ListByUser(ctx context.Context, userID string, offset, limit int) ([]Review, int64, error)
 	ListAll(ctx context.Context, status string, offset, limit int) ([]Review, int64, error)
-	ListApproved(ctx context.Context, offset, limit int) ([]Review, int64, error)
+	ListApproved(ctx context.Context, opts ListApprovedOptions, offset, limit int) ([]Review, int64, error)
 	Summary(ctx context.Context) (float64, int64, error)
 	Update(ctx context.Context, review *Review) error
 	Restore(ctx context.Context, review *Review) error
@@ -78,7 +90,7 @@ func (r *repository) FindByBookingIDUnscoped(ctx context.Context, bookingID stri
 }
 
 func (r *repository) ListByUser(ctx context.Context, userID string, offset, limit int) ([]Review, int64, error) {
-	q := r.db.WithContext(ctx).Model(&Review{}).Where("user_id = ?", userID)
+	q := r.db.WithContext(ctx).Model(&Review{}).Where("user_id = ?", userID).Order("created_at DESC")
 	return r.list(q, offset, limit)
 }
 
@@ -87,11 +99,24 @@ func (r *repository) ListAll(ctx context.Context, status string, offset, limit i
 	if status != "" {
 		q = q.Where("status = ?", status)
 	}
-	return r.list(q, offset, limit)
+	return r.list(q.Order("created_at DESC"), offset, limit)
 }
 
-func (r *repository) ListApproved(ctx context.Context, offset, limit int) ([]Review, int64, error) {
+// ListApproved dipakai halaman publik. Rating 0 berarti semua rating.
+func (r *repository) ListApproved(ctx context.Context, opts ListApprovedOptions, offset, limit int) ([]Review, int64, error) {
 	q := r.db.WithContext(ctx).Model(&Review{}).Where("is_approved = ?", true)
+	if opts.Rating >= 1 && opts.Rating <= 5 {
+		q = q.Where("rating = ?", opts.Rating)
+	}
+
+	switch opts.Sort {
+	case SortRatingDesc:
+		q = q.Order("rating DESC").Order("created_at DESC")
+	case SortRatingAsc:
+		q = q.Order("rating ASC").Order("created_at DESC")
+	default:
+		q = q.Order("created_at DESC")
+	}
 	return r.list(q, offset, limit)
 }
 
@@ -115,7 +140,7 @@ func (r *repository) list(q *gorm.DB, offset, limit int) ([]Review, int64, error
 		return nil, 0, err
 	}
 	var items []Review
-	err := q.Order("created_at DESC").Offset(offset).Limit(limit).Find(&items).Error
+	err := q.Offset(offset).Limit(limit).Find(&items).Error
 	return items, total, err
 }
 

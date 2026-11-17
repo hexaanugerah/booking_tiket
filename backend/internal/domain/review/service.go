@@ -69,8 +69,6 @@ func (s *Service) Create(ctx context.Context, userID string, req CreateReviewReq
 		return nil, ErrAlreadyReviewed
 	}
 
-	// Booking yang sebelumnya pernah diulas lalu ulasannya dihapus: hidupkan
-	// kembali baris lama agar unique index booking_id tetap terpenuhi.
 	deleted, err := s.repo.FindByBookingIDUnscoped(ctx, req.BookingID)
 	if err != nil {
 		return nil, apperror.Internal(err)
@@ -186,9 +184,27 @@ func (s *Service) ListAll(ctx context.Context, status string, page, limit int) (
 	return items, total, nil
 }
 
-func (s *Service) ListApproved(ctx context.Context, page, limit int) ([]Review, int64, error) {
+// ListApproved mendukung filter rating 1-5 dan urutan tertentu.
+// rating = 0 berarti semua rating; sort default "newest".
+func (s *Service) ListApproved(ctx context.Context, rating int, sort string, page, limit int) ([]Review, int64, error) {
+	if rating < 0 || rating > 5 {
+		return nil, 0, ErrInvalidRatingFilter
+	}
+
+	sort = strings.ToLower(strings.TrimSpace(sort))
+	switch sort {
+	case "":
+		sort = SortNewest
+	case SortNewest, SortRatingDesc, SortRatingAsc:
+	default:
+		return nil, 0, ErrInvalidSort
+	}
+
 	page, limit = normalizePaging(page, limit)
-	items, total, err := s.repo.ListApproved(ctx, (page-1)*limit, limit)
+	items, total, err := s.repo.ListApproved(ctx, ListApprovedOptions{
+		Rating: rating,
+		Sort:   sort,
+	}, (page-1)*limit, limit)
 	if err != nil {
 		return nil, 0, apperror.Internal(err)
 	}

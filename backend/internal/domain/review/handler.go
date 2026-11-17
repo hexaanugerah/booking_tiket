@@ -85,9 +85,22 @@ func (h *Handler) ListAll(c *gin.Context) {
 	response.OKWithMeta(c, "Ulasan retrieved", ToResponseList(items), response.BuildMeta(page, limit, total))
 }
 
+// ListApproved melayani halaman publik:
+// GET /reviews?rating=5&sort=rating_desc&page=1&limit=20
 func (h *Handler) ListApproved(c *gin.Context) {
 	page, limit := pageParams(c)
-	items, total, err := h.service.ListApproved(c.Request.Context(), page, limit)
+
+	rating := 0
+	if raw := c.Query("rating"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			response.BadRequest(c, "Filter rating harus berupa angka 1 sampai 5.", nil)
+			return
+		}
+		rating = parsed
+	}
+
+	items, total, err := h.service.ListApproved(c.Request.Context(), rating, c.Query("sort"), page, limit)
 	if err != nil {
 		apperror.WriteHTTP(c, err)
 		return

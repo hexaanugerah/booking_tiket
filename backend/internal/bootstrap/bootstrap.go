@@ -17,6 +17,8 @@ import (
 	tourismpackage "github.com/KawahPutih/backend/internal/domain/package"
 	"github.com/KawahPutih/backend/internal/domain/payments"
 	"github.com/KawahPutih/backend/internal/domain/public"
+	"github.com/KawahPutih/backend/internal/domain/refund"
+	"github.com/KawahPutih/backend/internal/domain/reschedule"
 	"github.com/KawahPutih/backend/internal/domain/review"
 	"github.com/KawahPutih/backend/internal/domain/role"
 	"github.com/KawahPutih/backend/internal/domain/ticketing"
@@ -63,6 +65,8 @@ type App struct {
 	AuditHandler              *audit.Handler
 	PublicHandler             *public.Handler
 	ReviewHandler             *review.Handler
+	RefundHandler             *refund.Handler
+	RescheduleHandler         *reschedule.Handler
 	VerificationHandler       *verification.Handler
 	DestinationInfoHandler    *destinationinfo.Handler
 	FAQHandler                *faq.Handler
@@ -172,6 +176,14 @@ func Build(cfg *config.Config, db *gorm.DB, log *zap.Logger) *App {
 	reviewService := review.NewService(reviewRepo)
 	reviewHandler := review.NewHandler(reviewService)
 
+	refundRepo := refund.NewRepository(db)
+	refundService := refund.NewService(refundRepo)
+	refundHandler := refund.NewHandler(refundService)
+
+	rescheduleRepo := reschedule.NewRepository(db)
+	rescheduleService := reschedule.NewService(rescheduleRepo)
+	rescheduleHandler := reschedule.NewHandler(rescheduleService)
+
 	verificationRepo := verification.NewRepository(db)
 	verificationService := verification.NewService(verificationRepo, ticketingService)
 	verificationHandler := verification.NewHandler(verificationService)
@@ -192,6 +204,7 @@ func Build(cfg *config.Config, db *gorm.DB, log *zap.Logger) *App {
 		PaymentSettingsHandler: paymentsSettingsHandler,
 		TicketingHandler:       ticketingHandler, AnalyticsHandler: analyticsHandler, VisitorsHandler: visitorsHandler,
 		AuditHandler: auditHandler, PublicHandler: publicHandler, ReviewHandler: reviewHandler,
+		RefundHandler: refundHandler, RescheduleHandler: rescheduleHandler,
 		VerificationHandler:    verificationHandler,
 		DestinationInfoHandler: destinationInfoHandler, FAQHandler: faqHandler, FacilityHandler: facilityHandler,
 		VisitorRuleHandler: visitorRuleHandler,

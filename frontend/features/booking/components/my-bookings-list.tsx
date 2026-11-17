@@ -3,15 +3,19 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import QRCode from "react-qr-code";
-import { QrCode, X, CalendarDays, Download } from "lucide-react";
+import { Banknote, CalendarClock, QrCode, X, CalendarDays, Download } from "lucide-react";
 import { toast } from "sonner";
 import { bookingService } from "@/services/booking.api.service";
 import { eTicketService } from "@/services/eticket.api.service";
+import { refundService } from "@/services/refund.api.service";
 import { downloadETicketPDF } from "@/lib/eticket-pdf";
+import { RefundRequestDialog } from "@/features/refund/components/refund-request-dialog";
+import { RescheduleDialog } from "@/features/booking/components/reschedule-dialog";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty/empty-state";
 import { rupiah, todayISO } from "@/lib/business";
 import type { Booking, ETicket } from "@/types/api";
+import type { Refund } from "@/types/refund";
 
 // Daftar booking saya — riwayat booking pengunjung dari backend API. Tab: Akan Datang / Selesai / Dibatalkan.
 
@@ -30,6 +34,10 @@ export function MyBookingsList() {
   const [bookings, setBookings] = useState<Booking[] | null>(null);
   const [tab, setTab] = useState<Tab>("upcoming");
   const [detailFor, setDetailFor] = useState<Booking | null>(null);
+  const [refundFor, setRefundFor] = useState<Booking | null>(null);
+  const [rescheduleFor, setRescheduleFor] = useState<Booking | null>(null);
+  const [refunds, setRefunds] = useState<Refund[]>([]);
+  const [refundRefreshKey, setRefundRefreshKey] = useState(0);
   const today = todayISO();
 
   function reload() {
@@ -40,6 +48,21 @@ export function MyBookingsList() {
   }
 
   useEffect(reload, []);
+
+  useEffect(() => {
+    let alive = true;
+    refundService
+      .listMine()
+      .then((rows) => {
+        if (alive) setRefunds(rows);
+      })
+      .catch(() => {
+        // Status refund bersifat tambahan; daftar booking tetap bisa dipakai.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [refundRefreshKey]);
 
   if (!bookings) {
     return (
@@ -110,6 +133,23 @@ export function MyBookingsList() {
 
   const hasTicket = (b: Booking) => ["PAID", "CONFIRMED", "USED"].includes(b.status);
 
+  const refundByBooking = new Map<string, Refund>();
+  for (const refund of refunds) {
+    if (!refundByBooking.has(refund.booking_id)) {
+      refundByBooking.set(refund.booking_id, refund);
+    }
+  }
+
+  const canRequestRefund = (b: Booking) => {
+    if (b.status !== "PAID" && b.status !== "CONFIRMED") return false;
+    if (b.visit_date <= today) return false;
+    const active = refundByBooking.get(b.id);
+    return !active || (active.status !== "PENDING" && active.status !== "APPROVED");
+  };
+
+  const canReschedule = (b: Booking) =>
+    (b.status === "PAID" || b.status === "CONFIRMED") && b.visit_date > today;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
@@ -166,6 +206,22 @@ export function MyBookingsList() {
                     <Download className="h-3.5 w-3.5" /> PDF
                   </button>
                 </>
+              )}
+              {canRequestRefund(b) && (
+                <button
+                  onClick={() => setRefundFor(b)}
+                  className="inline-flex h-8 items-center gap-1 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-600 hover:bg-red-50"
+                >
+                  <Banknote className="h-3.5 w-3.5" /> Refund
+                </button>
+              )}
+              {canReschedule(b) && (
+                <button
+                  onClick={() => setRescheduleFor(b)}
+                  className="inline-flex h-8 items-center gap-1 rounded-md border border-amber-200 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                >
+                  <CalendarClock className="h-3.5 w-3.5" /> Jadwal Ulang
+                </button>
               )}
               {b.status === "PENDING" && (
                 <>
@@ -225,6 +281,25 @@ export function MyBookingsList() {
           </div>
         </div>
       )}
+
+      <RefundRequestDialog
+        booking={refundFor}
+        onClose={() => setRefundFor(null)}
+        onSuccess={() => {
+          setRefundFor(null);
+          setRefundRefreshKey((key) => key + 1);
+          reload();
+        }}
+      />
+
+      <RescheduleDialog
+        booking={rescheduleFor}
+        onClose={() => setRescheduleFor(null)}
+        onSuccess={() => {
+          setRescheduleFor(null);
+          reload();
+        }}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { BookingItem } from "@/types/domain";
+import { USER_REFUND_DEDUCTION_PERCENT, type RefundInitiatedBy } from "@/types/refund";
 import { BOOKING_CONFIG } from "@/config/app.config";
 
 // Business logic — utilitas perhitungan terpusat. Tidak ada komponen yang menghitung total/harga/paginasi sendiri; semua lewat fungsi di sini agar konsisten.
@@ -6,6 +7,31 @@ import { BOOKING_CONFIG } from "@/config/app.config";
 /** Format angka ke Rupiah. */
 export function rupiah(value: number): string {
   return `Rp ${Math.round(value).toLocaleString("id-ID")}`;
+}
+
+export interface RefundBreakdown {
+  originalAmount: number;
+  deductionPercent: number;
+  deductionAmount: number;
+  netAmount: number;
+}
+
+/**
+ * Rincian refund: pengunjung dikenakan potongan 10%, refund langsung admin
+ * tanpa potongan. Rumus ini harus sama dengan perhitungan di backend.
+ */
+export function calculateRefundBreakdown(
+  total: number,
+  initiatedBy: RefundInitiatedBy = "USER"
+): RefundBreakdown {
+  const deductionPercent = initiatedBy === "USER" ? USER_REFUND_DEDUCTION_PERCENT : 0;
+  const deductionAmount = Math.floor((total * deductionPercent) / 100);
+  return {
+    originalAmount: total,
+    deductionPercent,
+    deductionAmount,
+    netAmount: total - deductionAmount,
+  };
 }
 
 /** Tanggal hari ini dalam format ISO yyyy-MM-dd (zona lokal). */

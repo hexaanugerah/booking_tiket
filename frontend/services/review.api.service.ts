@@ -1,13 +1,30 @@
 import { apiClient } from "@/lib/api/client";
 import type { ApiResponse } from "@/types/api";
-import type { CreateReviewPayload, Review, ReviewSummary, UpdateReviewPayload } from "@/types/review";
+import type {
+  CreateReviewPayload,
+  Review,
+  ReviewSort,
+  ReviewSummary,
+  UpdateReviewPayload,
+} from "@/types/review";
+
+export interface ReviewListParams {
+  page?: number;
+  limit?: number;
+  rating?: number;
+  sort?: ReviewSort;
+}
 
 export const reviewService = {
   /** Ulasan yang sudah tayang — boleh dibaca tanpa login. */
-  async listApproved(params: { page?: number; limit?: number } = {}): Promise<{ items: Review[]; total: number }> {
+  async listApproved(
+    params: ReviewListParams = {}
+  ): Promise<{ items: Review[]; total: number }> {
     const response = await apiClient.get<ApiResponse<Review[]>>("/reviews", {
       page: String(params.page ?? 1),
       limit: String(params.limit ?? 100),
+      rating: params.rating ? String(params.rating) : "",
+      sort: params.sort ?? "newest",
     });
     return {
       items: response.data ?? [],

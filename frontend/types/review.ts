@@ -1,4 +1,6 @@
-export type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type ReviewStatus = "APPROVED" | "REJECTED";
+
+export type ReviewSort = "newest" | "rating_desc" | "rating_asc";
 
 export interface Review {
   id: string;
@@ -31,7 +33,6 @@ export interface UpdateReviewPayload {
 }
 
 export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
-  PENDING: "Menunggu Moderasi",
   APPROVED: "Disetujui",
   REJECTED: "Ditolak",
 };
