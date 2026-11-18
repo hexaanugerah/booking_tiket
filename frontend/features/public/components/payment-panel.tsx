@@ -247,7 +247,7 @@ export function PaymentPanel({ code }: { code?: string }) {
   const [payment, setPayment] = useState<Payment | null>(null);
   const [destinations, setDestinations] = useState<PaymentDestination[]>([]);
   const [countdown, setCountdown] = useState<number>(0);
-  const [method, setMethod] = useState<PaymentMethodCode>("QRIS");
+  const [method, setMethod] = useState<PaymentMethodCode>("BCA_VA");
   const [proofUploading, setProofUploading] = useState(false);
   const [proofError, setProofError] = useState<string | null>(null);
   // null = tidak ada pembatasan (mis. endpoint belum tersedia).

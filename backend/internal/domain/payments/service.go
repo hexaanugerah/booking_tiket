@@ -82,10 +82,14 @@ func (s *Service) StartPayment(ctx context.Context, bookingID string, amount int
 
 	reference := generateReference()
 
+	// Metode awal memakai transfer bank manual: tidak bergantung pada
+	// kredensial payment gateway, sehingga halaman pembayaran langsung
+	// menampilkan metode yang bisa dipakai. Pengunjung tetap dapat memilih
+	// QRIS/e-wallet di halaman pembayaran bila gateway sudah dikonfigurasi.
 	p := &Payment{
 		BookingID:        bookingID,
 		Provider:         ProviderMidtrans,
-		Method:           MethodQRIS,
+		Method:           MethodBCAVA,
 		Reference:        reference,
 		Amount:           amount,
 		Status:           StatusPending,
