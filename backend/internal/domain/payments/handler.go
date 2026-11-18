@@ -124,7 +124,9 @@ func (h *Handler) AdminSetStatus(c *gin.Context) {
 		apperror.WriteHTTP(c, err)
 		return
 	}
-	response.OK(c, "payment status updated", result)
+	// Endpoint ini mengubah satu resource payment, jadi klien menerima objek
+	// payment lengkap (bukan envelope proses pembayaran).
+	response.OK(c, "payment status updated", result.Payment)
 }
 
 func (h *Handler) GetByID(c *gin.Context) {

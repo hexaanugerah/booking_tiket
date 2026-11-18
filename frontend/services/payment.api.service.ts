@@ -145,9 +145,17 @@ export const paymentService = {
 
   /** Update payment status (admin). */
   async updateStatus(id: string, status: PaymentStatus): Promise<Payment> {
-    const response = await apiClient.patch<{ success: boolean; message?: string; data: Payment }>(`/admin/payments/${id}/status`, { status });
-    if (!response.success) throw new PaymentError(response.message || "Failed to update payment status");
-    return response.data!;
+    // Backend mengembalikan objek payment langsung. Bentuk lama
+    // ({ booking, payment, outcome }) tetap ditangani agar aman saat rollback.
+    const response = await apiClient.patch<{
+      success: boolean;
+      message?: string;
+      data: Payment | { payment: Payment };
+    }>(`/admin/payments/${id}/status`, { status });
+    if (!response.success || !response.data) {
+      throw new PaymentError(response.message || "Failed to update payment status");
+    }
+    return "payment" in response.data ? response.data.payment : response.data;
   },
 
   /**

@@ -58,23 +58,19 @@ func (u *Usecase) ListAll(ctx context.Context, page, limit int, status string) (
 }
 
 func (u *Usecase) SetStatusByAdmin(ctx context.Context, paymentID, status string) (*ProcessResult, error) {
-	pay, bookingResp, err := u.service.SetStatusByAdmin(ctx, paymentID, status)
+	_, bookingResp, err := u.service.SetStatusByAdmin(ctx, paymentID, status)
+	if err != nil {
+		return nil, err
+	}
+	// Ambil DTO lengkap dari database agar klien menerima seluruh kolom
+	// (referensi, bukti bayar, settlement) setelah status berubah.
+	dto, err := u.service.GetByID(ctx, paymentID, "", true)
 	if err != nil {
 		return nil, err
 	}
 	return &ProcessResult{
 		Booking: bookingResp,
-		Payment: PaymentDTO{
-			ID:            pay.ID,
-			BookingID:     pay.BookingID,
-			Method:        pay.Method,
-			EWalletNumber: pay.EWalletNumber,
-			Amount:        pay.Amount,
-			Status:        pay.Status,
-			CreatedAt:     pay.CreatedAt,
-			PaidAt:        pay.PaidAt,
-			ExpiredAt:     pay.ExpiredAt,
-		},
+		Payment: *dto,
 		Outcome: "UPDATED",
 	}, nil
 }
