@@ -18,4 +18,6 @@ Set `APP_ENV` to `staging` or `production`, then configure the JWT secrets, `MID
 
 The standalone scheduler uses the configured MySQL connection regardless of `APP_ENV`.
 
-If an existing database was seeded by an earlier version, reset the passwords of any staff accounts created with the old built-in seed credentials. The new seed does not change existing passwords.
+If an existing database was seeded by an earlier version, set `SEED_RESET_STAFF_PASSWORD=true` once (together with the desired `SEED_*_PASSWORD`) to make the seeder update existing staff passwords and ensure their roles are attached. Turn it off again after the first successful restart.
+
+Manual payment methods (`BCA_VA`, `BNI_VA`, `MANDIRI_VA`, `BRIVA`, `ALFAMART`, `INDOMARET`) do not call Midtrans. They stay `PENDING` until the visitor uploads proof and an admin verifies it, so they remain usable even when the Midtrans key is not configured.

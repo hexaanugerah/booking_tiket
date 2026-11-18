@@ -141,6 +141,24 @@ var EwalletNumbers = []string{
 	EwalletBCAVA, EwalletBNIVA, EwalletMandiriVA, EwalletBRIVA,
 }
 
+var manualMethods = []string{
+	MethodBCAVA, MethodBNIVA, MethodMandiriVA, MethodBRIVA,
+	MethodAlfamart, MethodIndomaret,
+}
+
+// IsManualMethod menandai metode yang diselesaikan di luar payment gateway:
+// pengunjung membayar ke nomor tujuan yang tampil di aplikasi, mengunggah bukti,
+// lalu admin memverifikasi. Metode ini tidak boleh memanggil charge/status
+// Midtrans karena tidak punya transaksi provider.
+func IsManualMethod(m string) bool {
+	for _, v := range manualMethods {
+		if v == m {
+			return true
+		}
+	}
+	return false
+}
+
 func ValidMethod(m string) bool {
 	for _, v := range Methods {
 		if v == m {

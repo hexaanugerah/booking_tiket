@@ -225,6 +225,27 @@ func seedUsers(ctx context.Context, db *gorm.DB) error {
 			return err
 		}
 		if count > 0 {
+			// Seeder normal sengaja tidak menimpa password akun lama. Flag ini
+			// dipakai saat deploy ulang dengan database yang sudah punya akun
+			// staf dari seed versi sebelumnya, supaya password di prod.env
+			// benar-benar berlaku. Matikan lagi setelah sinkronisasi.
+			if resetStaffPasswordEnabled() {
+				hash, err := bcrypt.GenerateFromPassword([]byte(acc.password), 12)
+				if err != nil {
+					return err
+				}
+				if err := db.WithContext(ctx).Table("users").Where("email = ?", acc.email).Updates(map[string]interface{}{
+					"password_hash": string(hash),
+					"is_active":     true,
+					"is_verified":   true,
+				}).Error; err != nil {
+					return err
+				}
+			}
+			// Pastikan role tetap terpasang walau akunnya sudah ada.
+			if err := ensureUserRole(ctx, db, acc.email, acc.roleName); err != nil {
+				return err
+			}
 			continue
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(acc.password), 12)
@@ -250,6 +271,50 @@ func seedUsers(ctx context.Context, db *gorm.DB) error {
 			return fmt.Errorf("role %s missing", acc.roleName)
 		}
 		if err := db.WithContext(ctx).Exec("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", row.ID, roleRow.ID).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// resetStaffPasswordEnabled memaksa password akun staf yang sudah ada agar
+// sama dengan SEED_*_PASSWORD. Default mati; aktifkan hanya saat perlu
+// menyamakan akun hasil seed lama dengan konfigurasi deploy terbaru.
+func resetStaffPasswordEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("SEED_RESET_STAFF_PASSWORD"))) {
+	case "true", "1", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
+// ensureUserRole memastikan akun staf memiliki role yang diharapkan tanpa
+// menduplikasi baris user_roles.
+func ensureUserRole(ctx context.Context, db *gorm.DB, email, roleName string) error {
+	var user struct{ ID string }
+	if err := db.WithContext(ctx).Table("users").Select("id").Where("email = ?", email).Scan(&user).Error; err != nil {
+		return err
+	}
+	if user.ID == "" {
+		return fmt.Errorf("user %s missing", email)
+	}
+	var roleRow struct{ ID string }
+	if err := db.WithContext(ctx).Table("roles").Select("id").Where("name = ?", roleName).Scan(&roleRow).Error; err != nil {
+		return err
+	}
+	if roleRow.ID == "" {
+		return fmt.Errorf("role %s missing", roleName)
+	}
+	var count int64
+	if err := db.WithContext(ctx).Table("user_roles").
+		Where("user_id = ? AND role_id = ?", user.ID, roleRow.ID).Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		if err := db.WithContext(ctx).Exec(
+			"INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", user.ID, roleRow.ID,
+		).Error; err != nil {
 			return err
 		}
 	}

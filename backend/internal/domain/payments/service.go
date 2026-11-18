@@ -118,6 +118,10 @@ func (s *Service) StartPayment(ctx context.Context, bookingID string, amount int
 // agar pemanggil yang berjalan di jalur pembayaran bisa melaporkan penyebabnya
 // ke pengunjung, bukan menelan kegagalan charge secara diam-diam.
 func (s *Service) ensureProviderPaymentData(ctx context.Context, p *Payment, customerName, customerEmail string) error {
+	if IsManualMethod(p.Method) {
+		// Transfer bank/gerai retail tidak memiliki transaksi gateway.
+		return nil
+	}
 	if s.midtrans == nil || !s.midtrans.Configured() {
 		return nil
 	}
@@ -164,6 +168,9 @@ func gatewayError(action string, err error) error {
 // Hanya dihitung saat gateway memang dikonfigurasi, supaya mode lokal yang
 // menyimulasikan pembayaran tidak memunculkan peringatan palsu.
 func (s *Service) providerChargeMissing(p *Payment) bool {
+	if IsManualMethod(p.Method) {
+		return false
+	}
 	if s.env == "local" || s.midtrans == nil || !s.midtrans.Configured() {
 		return false
 	}
@@ -394,7 +401,23 @@ func (s *Service) Process(ctx context.Context, bookingID, requesterID string, pr
 	// Siapkan data provider untuk metode terpilih (QRIS string / Snap URL)
 	// agar frontend selalu punya cara pembayaran yang bisa ditampilkan.
 	if err := s.ensureProviderPaymentData(ctx, pay, snap.VisitorName, snap.Email); err != nil {
-		return nil, nil, "", gatewayError("Gateway pembayaran gagal membuat transaksi", err)
+		// Mode lokal memang menyimulasikan hasil pembayaran tanpa gateway
+		// sungguhan (sering tanpa kredensial valid), jadi kegagalan charge tidak
+		// boleh memblokir alur. Di staging/production kegagalan ini fatal.
+		if s.env == "local" {
+			s.log.Warn("payment gateway unavailable; payment is simulated in local mode",
+				zap.String("booking_id", bookingID), zap.Error(err))
+		} else {
+			return nil, nil, "", gatewayError("Gateway pembayaran gagal membuat transaksi", err)
+		}
+	}
+
+	// Metode manual tidak punya transaksi gateway untuk diperiksa. Status
+	// tetap PENDING sampai admin memverifikasi bukti bayar yang diunggah
+	// pengunjung (lihat SetStatusByAdmin).
+	if IsManualMethod(pay.Method) {
+		resp, err := s.bookings.GetResponse(ctx, bookingID, requesterID, privileged)
+		return resp, pay, "PENDING", err
 	}
 
 	outcome := forced
@@ -402,7 +425,7 @@ func (s *Service) Process(ctx context.Context, bookingID, requesterID string, pr
 		if forced != "" {
 			return nil, nil, "", apperror.Validation("Status pembayaran harus ditentukan oleh Midtrans.")
 		}
-		if s.midtrans == nil {
+		if s.midtrans == nil || !s.midtrans.Configured() {
 			return nil, nil, "", gatewayError("Gateway pembayaran belum dikonfigurasi", errors.New("midtrans gateway not configured"))
 		}
 		providerStatus, fraudStatus, statusErr := s.midtrans.GetTransactionStatus(ctx, pay.MidtransOrderID)
