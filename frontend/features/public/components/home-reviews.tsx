@@ -243,9 +243,9 @@ export function HomeReviews() {
             )}
 
             {formPending ? (
-              <div className="mt-5 space-y-3" aria-label="Memuat formulir ulasan">
-                <div className="h-10 animate-pulse rounded-md bg-[#e7f2fb]" />
-                <div className="h-10 animate-pulse rounded-md bg-[#e7f2fb]" />
+              <div className="mt-5" aria-label="Memuat formulir ulasan">
+                <div className="mb-3 h-10 animate-pulse rounded-md bg-[#e7f2fb]" />
+                <div className="mb-3 h-10 animate-pulse rounded-md bg-[#e7f2fb]" />
                 <div className="h-24 animate-pulse rounded-md bg-[#e7f2fb]" />
               </div>
             ) : !user ? (

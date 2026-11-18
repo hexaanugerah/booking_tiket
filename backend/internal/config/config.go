@@ -154,6 +154,18 @@ func Load() (*Config, error) {
 	if env == "production" && !cfg.Midtrans.IsProduction {
 		return nil, fmt.Errorf("Configuration error: MIDTRANS_IS_PRODUCTION must be true in production.")
 	}
+	// Format server key Midtrans berbeda per mode: sandbox diawali
+	// "SB-Mid-server", production diawali "Mid-server". Key yang tidak cocok
+	// dengan mode selalu ditolak gateway dengan 401, jadi hentikan di startup
+	// daripada gagal saat pengunjung menekan tombol bayar.
+	if key := strings.TrimSpace(cfg.Midtrans.ServerKey); key != "" {
+		if cfg.Midtrans.IsProduction && strings.HasPrefix(key, "SB-Mid-server") {
+			return nil, fmt.Errorf("Configuration error: MIDTRANS_SERVER_KEY is a sandbox key but MIDTRANS_IS_PRODUCTION=true; use the production server key (Mid-server-...).")
+		}
+		if !cfg.Midtrans.IsProduction && strings.HasPrefix(key, "Mid-server") {
+			return nil, fmt.Errorf("Configuration error: MIDTRANS_SERVER_KEY is a production key but MIDTRANS_IS_PRODUCTION=false; use the sandbox server key (SB-Mid-server-...).")
+		}
+	}
 	if env == "local" {
 		if cfg.JWT.AccessSecret == "" {
 			cfg.JWT.AccessSecret = localSecret()

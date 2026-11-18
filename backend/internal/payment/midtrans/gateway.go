@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -100,7 +101,7 @@ func (g *Gateway) CreateTransaction(ctx context.Context, orderID string, grossAm
 		return "", fmt.Errorf("midtrans decode: %w", err)
 	}
 	if resp.StatusCode >= 300 || len(res.ErrorMessages) > 0 {
-		return "", fmt.Errorf("midtrans Snap transaction failed (%d): %v", resp.StatusCode, res.ErrorMessages)
+		return "", errors.New(failureMessage("midtrans Snap transaction", resp.StatusCode, res.ErrorMessages, g.failureHint(resp.StatusCode)))
 	}
 	if res.RedirectURL == "" {
 		return "", fmt.Errorf("midtrans Snap transaction response is missing redirect_url")
@@ -159,7 +160,7 @@ func (g *Gateway) CreateQRIS(ctx context.Context, orderID string, grossAmount in
 		return "", fmt.Errorf("midtrans decode: %w", err)
 	}
 	if resp.StatusCode >= 300 || len(res.ErrorMessages) > 0 {
-		return "", fmt.Errorf("midtrans QRIS charge failed (%d): %v", resp.StatusCode, res.ErrorMessages)
+		return "", errors.New(failureMessage("midtrans QRIS charge", resp.StatusCode, res.ErrorMessages, g.failureHint(resp.StatusCode)))
 	}
 	if res.QRString == "" {
 		return "", fmt.Errorf("midtrans QRIS charge response is missing qr_string")
@@ -204,9 +205,31 @@ func (g *Gateway) GetTransactionStatus(ctx context.Context, orderID string) (sta
 		return "", "", fmt.Errorf("midtrans decode: %w", err)
 	}
 	if resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf("midtrans status failed (%d): %v", resp.StatusCode, result.ErrorMessages)
+		return "", "", errors.New(failureMessage("midtrans status", resp.StatusCode, result.ErrorMessages, g.failureHint(resp.StatusCode)))
 	}
 	return result.TransactionStatus, result.FraudStatus, nil
+}
+
+// failureHint menjelaskan penyebab umum kegagalan HTTP Midtrans agar operator
+// tidak perlu menebak arti status code saja.
+func (g *Gateway) failureHint(status int) string {
+	if status != http.StatusUnauthorized {
+		return ""
+	}
+	mode := "sandbox"
+	if g.cfg.IsProduction {
+		mode = "production"
+	}
+	return fmt.Sprintf(" — kredensial ditolak: server key tidak berlaku untuk mode %s (periksa MIDTRANS_SERVER_KEY/MIDTRANS_IS_PRODUCTION)", mode)
+}
+
+// failureMessage menyusun pesan kegagalan tanpa daftar kosong ": []" ketika
+// Midtrans tidak menyertakan error_messages.
+func failureMessage(action string, status int, msgs []string, hint string) string {
+	if detail := strings.Join(msgs, "; "); detail != "" {
+		return fmt.Sprintf("%s failed (%d)%s: %s", action, status, hint, detail)
+	}
+	return fmt.Sprintf("%s failed (%d)%s", action, status, hint)
 }
 
 func GenerateSignature(orderID, statusCode, grossAmount, serverKey string) string {

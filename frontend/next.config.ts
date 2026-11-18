@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
-// Origin backend untuk diteruskan server Next (rewrites). Hanya dipakai di sisi
-// server, jadi tidak perlu prefix NEXT_PUBLIC_ dan tidak bocor ke browser.
-const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? "http://localhost:8080";
+// Proxy /api/v1 dan /uploads TIDAK memakai rewrites di sini karena target
+// rewrites dibekukan saat build. Proxy ditangani route handler runtime
+// (app/api/v1/[...path]/route.ts dan app/uploads/[...path]/route.ts) yang
+// membaca BACKEND_ORIGIN pada setiap request.
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -14,15 +15,9 @@ const nextConfig: NextConfig = {
       { protocol: "http", hostname: "**" },
     ],
   },
-  // Teruskan API dan berkas unggahan lewat origin frontend sendiri. Dengan ini
-  // halaman yang dibuka dari HP, IP LAN, atau port forwarding VS Code tidak
-  // perlu menjangkau port 8080 langsung (bebas CORS dan mixed content).
-  async rewrites() {
-    return [
-      { source: "/api/v1/:path*", destination: `${BACKEND_ORIGIN}/api/v1/:path*` },
-      { source: "/uploads/:path*", destination: `${BACKEND_ORIGIN}/uploads/:path*` },
-    ];
-  },
+  // Teruskan API dan berkas unggahan lewat origin frontend sendiri. Proxy-nya
+  // ada di route handler runtime, bukan rewrites build-time, supaya origin
+  // backend dapat diganti tanpa membangun ulang Worker.
   async headers() {
     return [
       {

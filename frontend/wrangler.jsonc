@@ -11,6 +11,17 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Origin backend Go (tanpa /api/v1). Dibaca SAAT REQUEST oleh route handler
+  // /api/v1/[...path] dan /uploads/[...path], jadi mengganti nilainya tidak
+  // memerlukan build ulang Next.js.
+  //
+  // Isi dengan URL HTTPS publik backend, mis. https://api.kawahputih.id.
+  // Nilai kosong membuat proxy mengembalikan 503 dengan pesan konfigurasi.
+  // Alternatif tanpa mengubah file ini:
+  //   npx wrangler secret put BACKEND_ORIGIN
+  "vars": {
+    "BACKEND_ORIGIN": ""
+  },
   "observability": {
     "enabled": true
   }

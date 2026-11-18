@@ -1,6 +1,7 @@
 // API client — HTTP client untuk berkomunikasi dengan backend.
 
 import { resolveApiBaseUrl } from "@/lib/api-base";
+import { useAuthStore } from "@/store/auth.store";
 
 // Prioritas env sama seperti lib/axios.ts, agar kedua HTTP client
 // menghasilkan base URL yang sama apa pun nama env yang dipakai deployment.
@@ -88,6 +89,16 @@ class ApiClient {
   clearTokens() {
     this.setToken(null);
     this.setRefreshToken(null);
+  }
+
+  /**
+   * Sesi tidak bisa diselamatkan: hapus token dan state login yang dipersist,
+   * supaya UI tidak lagi menampilkan pengguna sebagai "sudah masuk" padahal
+   * backend sudah menolak tokennya (mis. token dari backend lain/secret lain).
+   */
+  private expireSession() {
+    this.clearTokens();
+    useAuthStore.getState().logout();
   }
 
   /**
@@ -194,14 +205,13 @@ class ApiClient {
       }
       if (!response.ok) {
         // Access token kedaluwarsa → coba rotasi refresh token, lalu ulangi
-        // permintaan ini sekali dengan token baru.
-        if (
-          response.status === 401 &&
-          !isRetry &&
-          !ApiClient.isAuthEndpoint(endpoint) &&
-          (await this.tryRefresh())
-        ) {
-          return this.request<T>(endpoint, options, true);
+        // permintaan ini sekali dengan token baru. Bila refresh juga gagal,
+        // sesi benar-benar berakhir: bersihkan token dan state login.
+        if (response.status === 401 && !isRetry && !ApiClient.isAuthEndpoint(endpoint)) {
+          if (await this.tryRefresh()) {
+            return this.request<T>(endpoint, options, true);
+          }
+          this.expireSession();
         }
         const message = data?.message || data?.error || "Terjadi kesalahan. Silakan coba kembali.";
         throw new ApiError(message, response.status, data);

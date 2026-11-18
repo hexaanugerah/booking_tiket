@@ -42,6 +42,13 @@ services:
 
   backend:
     image: ghcr.io/hexaanugerah/kawahputih-backend:latest
+    # Build dari source repo ini memakai Dockerfile yang sama dengan compose
+    # pengembangan. Jalankan `docker compose -f docker-compose.prod.yml build
+    # backend` (atau `up -d --build backend`) supaya perubahan kode Go ikut
+    # terpakai; tanpa build, compose memakai image GHCR yang sudah ada.
+    build:
+      context: ../backend
+      dockerfile: ../docker/backend.Dockerfile
     restart: unless-stopped
     env_file:
       - path: ./prod.env
