@@ -104,6 +104,25 @@ Catatan:
    Untuk URL permanen, buat named tunnel Cloudflare (butuh akun + domain) ke
    `http://localhost:3000`.
 
+## Deploy ke Vercel (frontend) + Railway (backend)
+
+Konfigurasi yang dipakai saat ini: halaman di Vercel, API Go di Railway.
+
+1. Vercel → Project Settings → Environment Variables:
+   `NEXT_PUBLIC_API_BASE_URL=https://<backend>.up.railway.app/api/v1`.
+   Nilai `NEXT_PUBLIC_*` di-*inline* saat build, jadi setelah mengubahnya
+   lakukan redeploy (build baru).
+2. Railway (service backend) → `FRONTEND_URL=https://<frontend>.vercel.app`.
+   Variabel ini dipakai untuk CORS dan redirect OAuth; beberapa origin boleh
+   dipisah koma.
+3. `BACKEND_ORIGIN` hanya dibutuhkan bila memakai proxy runtime
+   (`app/api/v1/[...path]/route.ts` + `app/uploads/[...path]/route.ts`).
+   Dengan `NEXT_PUBLIC_API_BASE_URL` absolut ke Railway, browser memanggil
+   Railway langsung dan CORS backend yang menanganinya.
+4. Bukti pembayaran disimpan di `UPLOAD_DIR` backend. Di Railway pasang volume
+   permanen (mount path `/app/uploads`, `UPLOAD_DIR=/app/uploads`) agar berkas
+   tidak hilang saat container restart.
+
 ## Deploy ke Cloudflare Workers
 
 Frontend di-deploy sebagai Cloudflare Worker lewat adapter OpenNext
@@ -116,29 +135,59 @@ npm run cf:deploy         # upload ke Cloudflare
 npm run cf:preview        # uji hasil build di lokal (port 8787)
 ```
 
-Catatan penting:
+### 1. Siapkan backend dengan URL publik yang tetap
 
-1. `NEXT_PUBLIC_API_BASE_URL` di-*inline* saat build, jadi isi
-   `.env.production.local` dengan URL backend yang bisa diakses publik
-   (HTTPS) **sebelum** `npm run cf:build`.
-2. Backend Go (MySQL, Redis, penyimpanan `uploads/`) tidak bisa dijalankan
-   di Workers — host terpisah (VPS/Docker). Daftarkan domain Worker di
-   `FRONTEND_URL` backend (daftar dipisah koma) supaya CORS dan redirect
-   OAuth Google mengarah ke domain yang benar.
+Backend Go (MySQL, Redis, `uploads/`) tidak bisa berjalan di Workers. Worker
+juga **tidak bisa menjangkau `localhost` atau IP LAN**, jadi backend harus
+punya URL HTTPS yang bisa diakses dari internet, misalnya:
+
+- VPS + domain: `https://api.kawahputih.id`
+- Cloudflare Named Tunnel: `https://api.kawahputih.id`
+- Platform lain: `https://<service>.onrender.com`, dsb.
+
+Quick Tunnel (`https://<acak>.trycloudflare.com`) berubah setiap restart dan
+tidak cocok untuk konfigurasi tetap. Tes dulu dari internet:
+
+```bash
+curl https://api.kawahputih.id/healthz
+```
+
+### 2. Atur `BACKEND_ORIGIN` (runtime, tanpa build ulang)
+
+Proxy `/api/v1/*` dan `/uploads/*` sekarang ditangani route handler runtime
+(`app/api/v1/[...path]/route.ts` + `app/uploads/[...path]/route.ts`). Nilai
+`BACKEND_ORIGIN` dibaca pada setiap request, bukan dibekukan saat build.
+
+Isi URL backend (tanpa `/api/v1`) di `wrangler.jsonc`:
+
+```jsonc
+"vars": {
+  "BACKEND_ORIGIN": "https://api.kawahputih.id"
+}
+```
+
+Alternatif tanpa mengubah file:
+
+```bash
+npx wrangler secret put BACKEND_ORIGIN
+```
+
+Setelah build pertama, mengubah URL backend cukup dengan mengubah nilai itu
+lalu `npm run cf:deploy` — tidak perlu `cf:build` lagi. Kalau nilainya kosong,
+API mengembalikan HTTP 503 dengan pesan `BACKEND_ORIGIN belum diatur`.
+
+### 3. Catatan lain
+
+1. `NEXT_PUBLIC_API_BASE_URL` masih di-*inline* saat build, tetapi
+   `lib/api-base.ts` mengubahnya menjadi path relatif `/api/v1` ketika halaman
+   dibuka dari domain publik. Jadi build LAN yang sudah ada tetap bisa dipakai
+   di Worker selama `BACKEND_ORIGIN` diisi.
+2. Daftarkan domain Worker di `FRONTEND_URL` backend (dipisah koma) untuk
+   redirect OAuth Google. Untuk API lewat proxy, CORS tidak relevan karena
+   browser hanya bicara ke origin Worker.
 3. Nama Worker diatur di `wrangler.jsonc` (`name: "kawahputih"`).
-4. Worker meneruskan `/api/v1/*` dan `/uploads/*` ke `BACKEND_ORIGIN`
-   (default `http://localhost:8080`). Karena Worker tidak bisa menjangkau LAN,
-   isi `BACKEND_ORIGIN` dengan URL backend yang publik saat build:
-
-   ```bash
-   BACKEND_ORIGIN=https://<url-backend-publik> npx opennextjs-cloudflare build
-   CI=true npx wrangler deploy
-   ```
-
-   Kalau `BACKEND_ORIGIN` tidak diisi, situs hasil deploy akan memanggil
-   `localhost` dan API-nya gagal. Proxy ini juga membuat CORS tidak relevan
-   karena browser hanya bicara ke origin Worker.
 4. `cf:build` memindahkan isi `.next` ke `.open-next`, sehingga `next start`
    lokal akan gagal / menyajikan halaman tanpa CSS setelahnya. Untuk lokal
    pakai `npm run dev`, atau jalankan `npm run build` lagi sebelum
    `npm run start`.
+
