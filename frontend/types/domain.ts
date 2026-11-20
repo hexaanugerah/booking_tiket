@@ -23,7 +23,9 @@ export interface BookingItem {
 }
 
 export interface Booking {
-  id: string; // KP-YYYYMMDD-XXXXXX
+  id: string; // UUID booking
+  /** Kode booking yang ditampilkan ke pengunjung, mis. KP-YYYYMMDD-XXXXXX. */
+  bookingCode: string;
   userId: string | null; // null = guest (belum login)
   visitorName: string;
   email: string;
@@ -70,6 +72,8 @@ export interface ETicket {
   quantity: number;
   total: number;
   status: TicketValidityStatus;
+  /** Payload unik yang dikodekan ke QR — harus sama dengan yang tampil di UI. */
+  qrData: string;
   generatedAt: string;
   checkedInAt?: string;
   checkedInGate?: string;

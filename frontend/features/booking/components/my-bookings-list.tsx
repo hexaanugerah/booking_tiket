@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { bookingService } from "@/services/booking.api.service";
 import { eTicketService } from "@/services/eticket.api.service";
 import { refundService } from "@/services/refund.api.service";
-import { downloadETicketPDF } from "@/lib/eticket-pdf";
+import { downloadETicketPDF, toPdfBooking, toPdfTicket } from "@/lib/eticket-pdf";
 import { RefundRequestDialog } from "@/features/refund/components/refund-request-dialog";
 import { RescheduleDialog } from "@/features/booking/components/reschedule-dialog";
 import { Card } from "@/components/ui/card";
@@ -97,27 +97,7 @@ export function MyBookingsList() {
       return;
     }
     try {
-      const t = res.ticket;
-      await downloadETicketPDF(
-        {
-          ...t,
-          bookingId: t.booking_id,
-          visitorName: t.visitor_name,
-          visitDate: t.visit_date,
-          ticketName: t.ticket_name,
-          generatedAt: t.generated_at,
-        } as any,
-        {
-          ...res.booking,
-          userId: null,
-          visitorName: res.booking.visitor_name,
-          visitDate: res.booking.visit_date,
-          serviceFee: res.booking.service_fee,
-          totalTickets: res.booking.total_tickets,
-          createdAt: res.booking.created_at,
-          ticketId: null,
-        } as any,
-      );
+      await downloadETicketPDF(toPdfTicket(res.ticket), toPdfBooking(res.booking));
       await eTicketService.markDownloaded(b.id);
       toast.success("E-tiket diunduh");
     } catch {

@@ -6,7 +6,7 @@ import { Download, Printer, Info, CheckCircle2, XCircle, Loader2 } from "lucide-
 import QRCode from "react-qr-code";
 import { toast } from "sonner";
 import { bookingService, eTicketService, BookingError } from "@/services/api";
-import { downloadETicketPDF } from "@/lib/eticket-pdf";
+import { downloadETicketPDF, toPdfBooking, toPdfTicket } from "@/lib/eticket-pdf";
 import { rupiah } from "@/lib/business";
 import type { Booking, ETicket } from "@/types/api";
 
@@ -53,36 +53,9 @@ export default function ETicketPage() {
     if (!data) return;
     setDownloading(true);
     try {
-      // Lib PDF memakai tipe domain camelCase, jadi petakan dari ETicket snake_case API sebelum render.
-      const t = data.ticket;
-      const pdfTicket = {
-        ...t,
-        bookingId: t.booking_id,
-        visitorName: t.visitor_name,
-        visitDate: t.visit_date,
-        ticketName: t.ticket_name,
-        generatedAt: t.generated_at,
-        checkedInAt: t.checked_in_at,
-        checkedInGate: t.checked_in_gate,
-      };
-      const b = data.booking;
-      const pdfBooking = {
-        ...b,
-        userId: b.user_id ?? null,
-        visitorName: b.visitor_name,
-        visitDate: b.visit_date,
-        items: b.items.map((it) => ({
-          ticketId: it.ticket_id,
-          ticketName: it.ticket_name,
-          price: it.price,
-          quantity: it.quantity,
-        })),
-        serviceFee: b.service_fee,
-        totalTickets: b.total_tickets,
-        createdAt: b.created_at,
-        ticketId: b.ticket_id ?? null,
-      };
-      await downloadETicketPDF(pdfTicket as any, pdfBooking as any);
+      // Pemetaan terpusat di lib PDF — payload QR, kode booking, dan field lain
+      // selalu identik dengan yang tampil di halaman ini.
+      await downloadETicketPDF(toPdfTicket(data.ticket), toPdfBooking(data.booking));
       await eTicketService.markDownloaded(data.booking.id);
       toast.success("E-tiket berhasil diunduh");
     } catch {
