@@ -1,0 +1,42 @@
+# =============================================================================
+# Build context root dipakai oleh Dockerfile (backend + frontend).
+# Kecualikan hal-hal yang tidak dibutuhkan image agar build cepat dan tidak
+# membocorkan rahasia lokal.
+# =============================================================================
+
+# Git & editor
+.git
+.gitignore
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# Konfigurasi Docker itu sendiri
+docker/
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Dependency & hasil build (akan dibuat ulang di dalam image)
+**/node_modules
+**/.next
+**/.open-next
+**/.wrangler
+**/tsconfig.tsbuildinfo
+**/next-env.d.ts
+**/bin
+**/*.exe
+**/*.test
+**/*.out
+**/coverage.out
+
+# Environment & rahasia lokal
+**/.env
+**/.env.*
+!**/.env.example
+
+# Data lokal
+backend/uploads/
+**/*.log
+tmp/
