@@ -44,7 +44,7 @@ COPY --from=backend-builder /out/server ./server
 RUN mkdir -p /app/uploads && chown -R app:app /app
 
 USER app
-EXPOSE 8080
+EXPOSE 1031
 
 ENTRYPOINT ["/app/server"]
 
