@@ -51,7 +51,7 @@ services:
       # APP_ENV=local sengaja dipakai sebagai default: JWT/Midtrans tidak wajib.
       # Untuk produksi set APP_ENV=production dan isi semua secret di .env.
       APP_ENV: ${APP_ENV:-local}
-      APP_PORT: "8080"
+      APP_PORT: "1031"
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080,http://127.0.0.1:8080}
       BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8080}
 
