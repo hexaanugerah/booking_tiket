@@ -5,6 +5,9 @@
 # Cukup jalankan dari root projek:
 #   sudo bash scripts/deploy-server.sh
 #
+# Di server baru, cara tercepat (clone + deploy sekaligus):
+#   curl -fsSL https://raw.githubusercontent.com/hexaanugerah/booking_tiket/main/scripts/bootstrap.sh | sudo bash
+#
 # Tanpa konfigurasi tambahan, aplikasi langsung bisa dibuka lewat IP server
 # (http://IP_SERVER) tanpa domain, DNS, atau panel web apa pun.
 #
@@ -32,8 +35,8 @@ DOMAIN="${DOMAIN:-}"
 ENABLE_HTTPS="${ENABLE_HTTPS:-false}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
 PUBLIC_HOST_OVERRIDE="${PUBLIC_HOST:-}"
-APP_DIR="${APP_DIR:-/opt/kawahputihukk}"
-REPO_URL="${REPO_URL:-https://github.com/hexaanugerah/kawahputihukk.git}"
+APP_DIR="${APP_DIR:-/opt/booking_tiket}"
+REPO_URL="${REPO_URL:-https://github.com/hexaanugerah/booking_tiket.git}"
 APP_ENV="${APP_ENV:-local}"
 STOP_OLD_STACK="${STOP_OLD_STACK:-true}"
 ENABLE_UFW="${ENABLE_UFW:-true}"
@@ -183,6 +186,10 @@ if [[ "$EDGE_PROXY" == "auto" ]]; then
 fi
 case "$EDGE_PROXY" in
   true)
+    if port_in_use 80 \
+      && ! { [[ -e /etc/nginx/sites-enabled/kawahputih ]] && systemctl is-active --quiet nginx; }; then
+      die "EDGE_PROXY=true tetapi port 80 dipakai proses lain (Coolify/Traefik/Apache). Gunakan EDGE_PROXY=auto atau false."
+    fi
     STACK_BIND_HOST="127.0.0.1"
     ;;
   false)

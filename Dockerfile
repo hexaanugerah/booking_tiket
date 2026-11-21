@@ -71,16 +71,20 @@ COPY frontend/ ./
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api/v1
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 
-RUN npm run build
+# Cache build webpack tidak diperlukan saat runtime dan besarnya bisa
+# ratusan MB, jadi dibuang sebelum disalin ke image akhir.
+RUN npm run build && rm -rf .next/cache
 
 FROM node:22-alpine AS frontend-prod-deps
 
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 # typescript dibutuhkan untuk memuat next.config.ts saat `next start`.
-# sharp (optimasi gambar) sudah ikut sebagai optional dependency Next.js.
-RUN npm ci --omit=dev \
-    && npm install --omit=dev --no-save typescript@5.6.3
+# Package ini ada di devDependencies sehingga tidak ikut `npm ci --omit=dev`,
+# jadi disalin langsung dari node_modules hasil build.
+RUN npm ci --omit=dev
+
+COPY --from=frontend-builder /app/node_modules/typescript ./node_modules/typescript
 
 FROM node:22-alpine AS frontend
 
@@ -89,12 +93,13 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000
 
-COPY --from=frontend-prod-deps /app/node_modules ./node_modules
-COPY --from=frontend-builder /app/.next ./.next
-COPY --from=frontend-builder /app/public ./public
-COPY frontend/package.json frontend/package-lock.json frontend/next.config.ts frontend/tsconfig.json ./
+# --chown dipakai langsung di COPY supaya tidak perlu `chown -R` yang akan
+# menyalin ulang seluruh isi /app ke layer baru (membuat image membengkak).
+COPY --chown=node:node --from=frontend-prod-deps /app/node_modules ./node_modules
+COPY --chown=node:node --from=frontend-builder /app/.next ./.next
+COPY --chown=node:node --from=frontend-builder /app/public ./public
+COPY --chown=node:node frontend/package.json frontend/package-lock.json frontend/next.config.ts frontend/tsconfig.json ./
 
-RUN chown -R node:node /app
 USER node
 
 EXPOSE 3000

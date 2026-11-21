@@ -9,10 +9,10 @@ name: CI/CD Docker - Kawah Putih
 #   VPS_USERNAME   : user SSH (disarankan user yang masuk grup docker)
 #   VPS_SSH_KEY    : private key SSH
 #   VPS_PORT       : opsional, default 22
-#   VPS_APP_DIR    : opsional, default /opt/kawahputihukk/kawahputih
+#   VPS_APP_DIR    : opsional, default /opt/booking_tiket
 #
 # Jika VPS_APP_DIR belum ada, jalankan sekali di server:
-#   sudo bash scripts/deploy-server.sh
+#   curl -fsSL https://raw.githubusercontent.com/hexaanugerah/booking_tiket/main/scripts/bootstrap.sh | sudo bash
 
 on:
   push:
@@ -68,7 +68,26 @@ jobs:
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
     steps:
+      - name: Periksa secrets deploy
+        run: |
+          missing=""
+          [ -n "$VPS_HOST" ] || missing="$missing VPS_HOST"
+          [ -n "$VPS_USERNAME" ] || missing="$missing VPS_USERNAME"
+          [ -n "$VPS_SSH_KEY" ] || missing="$missing VPS_SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Secrets deploy belum diisi:$missing"
+            echo "Tambahkan di Settings > Secrets and variables > Actions."
+            echo "Atau deploy manual di server dengan scripts/bootstrap.sh."
+            exit 1
+          fi
+
       - name: Pull kode & rebuild di VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -81,7 +100,7 @@ jobs:
             set -e
             APP_DIR="${{ secrets.VPS_APP_DIR }}"
             if [ -z "$APP_DIR" ]; then
-              APP_DIR="/opt/kawahputihukk/kawahputih"
+              APP_DIR="/opt/booking_tiket"
             fi
             cd "$APP_DIR"
             if [ ! -f .env ]; then
@@ -96,7 +115,9 @@ jobs:
             APP_PORT="$(grep -E '^APP_PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
             APP_PORT="${APP_PORT:-8080}"
             for i in $(seq 1 30); do
-              if curl -fsS "http://127.0.0.1:${APP_PORT}/healthz"; then
+              if curl -fsS "http://127.0.0.1:${APP_PORT}/healthz" >/dev/null \
+                && curl -fsS -o /dev/null "http://127.0.0.1:${APP_PORT}/"; then
+                echo "Aplikasi sehat di http://127.0.0.1:${APP_PORT}"
                 exit 0
               fi
               sleep 3
