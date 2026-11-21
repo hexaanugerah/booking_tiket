@@ -1,4 +1,7 @@
-#===================================
+
+# ===================================
+# KAWAH PUTIH - DOCKER COMPOSE
+# ===================================
 
 name: kawahputih
 
@@ -7,7 +10,7 @@ services:
   # Database
   # --------------------------------------------------------------------------
   mysql:
-    # 8.4 = versi LTS. Volume dari MySQL 8.4 tidak bisa dibuka oleh 8.0.
+    # MySQL 8.4 LTS
     image: mysql:8.4
     restart: unless-stopped
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
@@ -24,11 +27,13 @@ services:
       timeout: 5s
       retries: 20
       start_period: 30s
-    # Buka hanya bila perlu mengakses MySQL dari komputer host
-    # (mis. MySQL Workbench / DBeaver). Bisa bentrok dengan MySQL lokal.
+    # Port host 6033 -> port internal 3306
     ports:
       - "6033:3306"
 
+  # --------------------------------------------------------------------------
+  # Redis
+  # --------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -39,7 +44,7 @@ services:
       retries: 10
 
   # --------------------------------------------------------------------------
-  # API backend (Go)
+  # API Backend (Go)
   # --------------------------------------------------------------------------
   backend:
     build:
@@ -50,12 +55,13 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-local}
       APP_PORT: "1022"
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080,http://127.0.0.1:8080}
-      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8080}
 
-      # Koneksi database — host "mysql" adalah nama service di atas.
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8081,http://127.0.0.1:8081}
+      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8081}
+
+      # Database
       DB_HOST: mysql
-      DB_PORT: "6033"
+      DB_PORT: "3306"
       DB_USER: ${DB_USER:-kawahputih}
       DB_PASSWORD: ${DB_PASSWORD:-kawahputih_secret}
       DB_NAME: ${DB_NAME:-kawah_putih_db}
@@ -63,42 +69,52 @@ services:
       DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-50}
       DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-10}
 
+      # Redis
       REDIS_ADDR: redis:6379
       REDIS_DB: ${REDIS_DB:-0}
 
+      # JWT
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-}
       JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES:-15}
       JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-7}
       JWT_ISSUER: ${JWT_ISSUER:-KawahPutih}
 
+      # Midtrans
       MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY:-}
       MIDTRANS_IS_PRODUCTION: ${MIDTRANS_IS_PRODUCTION:-false}
 
+      # SMTP
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-no-reply@kawahputih.id}
 
+      # Google OAuth
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:8080/api/v1/auth/google/callback}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:8081/api/v1/auth/google/callback}
 
+      # Seed accounts
       SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
       SEED_MANAGER_PASSWORD: ${SEED_MANAGER_PASSWORD:-}
       SEED_PETUGAS_PASSWORD: ${SEED_PETUGAS_PASSWORD:-}
       SEED_RESET_STAFF_PASSWORD: ${SEED_RESET_STAFF_PASSWORD:-false}
 
+      # Upload
       UPLOAD_DIR: /app/uploads
+
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
+
     volumes:
       - uploads:/app/uploads
+
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:1022/healthz >/dev/null || exit 1"]
       interval: 10s
@@ -107,7 +123,7 @@ services:
       start_period: 30s
 
   # --------------------------------------------------------------------------
-  # Web frontend (Next.js)
+  # Web Frontend (Next.js)
   # --------------------------------------------------------------------------
   frontend:
     build:
@@ -115,19 +131,20 @@ services:
       dockerfile: Dockerfile
       target: frontend
       args:
-        # URL absolut yang dipanggil browser. Default cocok untuk akses dari
-        # komputer ini. Saat deploy ke server/domain, ubah lewat .env, mis.
-        # NEXT_PUBLIC_API_BASE_URL=https://api.kawahputih.id/api/v1
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:1031/api/v1}
+        # Browser menggunakan gateway sebagai pintu masuk API
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
+
     restart: unless-stopped
+
     environment:
-      # Dipakai route handler proxy /api/v1 dan /uploads di sisi server Next.
-      # Nilai ini dibaca saat request, bukan saat build.
-      BACKEND_ORIGIN: http://backend:1031
+      # Proxy Next.js menuju backend internal Docker
+      BACKEND_ORIGIN: http://backend:1022
       PORT: "3022"
+
     depends_on:
       backend:
         condition: service_healthy
+
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3022/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 15s
@@ -136,25 +153,27 @@ services:
       start_period: 30s
 
   # --------------------------------------------------------------------------
-  # Gateway: satu-satunya pintu masuk dari browser (port 8080).
-  # Backend, frontend, MySQL, dan Redis tidak diekspos langsung ke host.
+  # Gateway (Nginx)
   # --------------------------------------------------------------------------
   gateway:
     build:
       context: .
       dockerfile: Dockerfile
       target: gateway
+
     image: kawahputih-gateway
     restart: unless-stopped
+
     depends_on:
       backend:
         condition: service_healthy
       frontend:
         condition: service_healthy
+
     ports:
-      # Default hanya localhost. Untuk akses dari HP di jaringan yang sama,
-      # set BIND_HOST=0.0.0.0 di file .env.
+      # Satu-satunya pintu masuk aplikasi
       - "${BIND_HOST:-127.0.0.1}:${APP_PORT:-8081}:80"
+
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
       interval: 10s
@@ -162,6 +181,9 @@ services:
       retries: 6
       start_period: 20s
 
+# --------------------------------------------------------------------------
+# Persistent Volumes
+# --------------------------------------------------------------------------
 volumes:
   mysql-data:
   uploads:
