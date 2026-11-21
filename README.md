@@ -60,6 +60,21 @@ Hentikan tanpa menghapus data:
 docker compose down
 ```
 
+### Menjalankan backend langsung (opsional)
+
+Untuk development Go tanpa rebuild container:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d mysql redis
+cd backend
+go run ./cmd/server
+```
+
+MySQL dan Redis hanya dibuka di `127.0.0.1` (tidak ke jaringan/internet).
+`backend/.env` sudah berisi kredensial yang cocok dengan Compose. Backend
+berjalan di `http://localhost:8080`, sedangkan stack Docker tetap di port
+`APP_PORT` (default `1050`).
+
 ---
 
 ## Deploy ke server (tanpa dashboard web/Coolify)

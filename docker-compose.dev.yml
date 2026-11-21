@@ -1,0 +1,18 @@
+# Override untuk development di komputer sendiri.
+#
+# Membuka MySQL dan Redis HANYA di 127.0.0.1 supaya backend bisa dijalankan
+# langsung dengan `go run ./cmd/server` memakai backend/.env.
+#
+# Pakai:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d mysql redis
+#
+# Jangan pakai file ini di server produksi. Stack utama (docker compose
+# up -d) tetap tidak mempublikasikan MySQL/Redis ke host.
+services:
+  mysql:
+    ports:
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3306}:3306"
+
+  redis:
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
