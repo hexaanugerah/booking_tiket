@@ -63,6 +63,16 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
+      - name: Build image gateway
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: gateway
+          push: false
+          tags: kawahputih-gateway:ci
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
+
   deploy:
     name: Deploy SSH + Docker Compose (tanpa Coolify)
     needs: build
