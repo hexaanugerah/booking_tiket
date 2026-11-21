@@ -64,23 +64,43 @@ docker compose down
 
 ## Deploy ke server (tanpa dashboard web/Coolify)
 
-Di server Ubuntu/Debian:
+Dari Windows, satu klik:
 
-```bash
-git clone https://github.com/hexaanugerah/kawahputihukk.git /opt/kawahputihukk
-cd /opt/kawahputihukk/kawahputih
-sudo bash scripts/deploy-server.sh
+```powershell
+scripts\deploy-now.cmd
 ```
 
-Skrip akan memasang Docker, membuat `.env` dengan password/secret acak,
-menjalankan MySQL + Redis + backend + frontend + gateway, menjalankan migrasi
-dan seed otomatis, lalu menampilkan URL aplikasi dan password superadmin.
+Skrip menanyakan host/IP asli VPS, user SSH, dan port. Setelah itu ia SSH ke
+server dan menjalankan bootstrap otomatis. Tidak perlu membuka dashboard.
+
+Langsung dari server (Ubuntu/Debian, root):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hexaanugerah/booking_tiket/main/scripts/bootstrap.sh | sudo bash
+```
+
+Perintah itu otomatis clone/update kode ke `/opt/booking_tiket`, memasang
+Docker, membuat `.env` dengan password/secret acak, menjalankan MySQL + Redis +
+backend + frontend + gateway, menjalankan migrasi dan seed otomatis, lalu
+menampilkan URL aplikasi dan password superadmin.
+
+Alternatif manual:
+
+```bash
+git clone https://github.com/hexaanugerah/booking_tiket.git /opt/booking_tiket
+cd /opt/booking_tiket
+sudo bash scripts/deploy-server.sh
+```
 
 - Jika port 80 bebas, Nginx host dipakai dan aplikasi dibuka lewat
   `http://IP_SERVER`.
 - Jika port 80 sudah dipakai Coolify/Traefik, skrip otomatis melewati Nginx
-  host dan membuka aplikasi di `http://IP_SERVER:8080`. Coolify tidak perlu
-  dimatikan dan tidak ada dashboard yang perlu dibuka.
+  host dan membuka aplikasi di `http://IP_SERVER:8080` (atau port kosong
+  berikutnya bila 8080 juga terpakai). Coolify tidak perlu dimatikan dan tidak
+  ada dashboard yang perlu dibuka.
+- Bila domain utama sudah dipakai Coolify, domain itu tetap milik Coolify.
+  Gunakan URL yang dicetak skrip, atau sediakan subdomain/DNS khusus untuk
+  aplikasi ini.
 
 ### Domain + HTTPS (opsional)
 
@@ -120,9 +140,9 @@ Isi secrets di GitHub > Settings > Secrets and variables > Actions:
 | `VPS_USERNAME` | user SSH yang masuk grup `docker` |
 | `VPS_SSH_KEY` | private key SSH |
 | `VPS_PORT` | opsional, default 22 |
-| `VPS_APP_DIR` | opsional, default `/opt/kawahputihukk/kawahputih` |
+| `VPS_APP_DIR` | opsional, default `/opt/booking_tiket` |
 
-Jalankan `scripts/deploy-server.sh` sekali di server agar `.env` tersedia.
+Jalankan `scripts/bootstrap.sh` sekali di server agar kode dan `.env` tersedia.
 Setelah itu setiap push ke `main` akan build image lalu deploy lewat SSH.
 
 ---

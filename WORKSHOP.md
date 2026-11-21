@@ -83,9 +83,25 @@ yaitu `localhost:8080`, sama seperti ketentuan job sheet.
 
 ### Di server (Ubuntu/Debian)
 
+Dari Windows, jalankan:
+
+```powershell
+scripts\deploy-now.cmd
+```
+
+Skrip menanyakan IP asli VPS, user SSH, dan port, lalu menjalankan bootstrap di
+server. Alternatif langsung di server, satu perintah:
+
 ```bash
-git clone https://github.com/hexaanugerah/kawahputihukk.git /opt/kawahputihukk
-cd /opt/kawahputihukk/kawahputih
+curl -fsSL https://raw.githubusercontent.com/hexaanugerah/booking_tiket/main/scripts/bootstrap.sh | sudo bash
+```
+
+Perintah itu otomatis clone/update kode ke `/opt/booking_tiket`, lalu
+menjalankan seluruh proses deploy. Alternatif manual:
+
+```bash
+git clone https://github.com/hexaanugerah/booking_tiket.git /opt/booking_tiket
+cd /opt/booking_tiket
 sudo bash scripts/deploy-server.sh
 ```
 
@@ -113,9 +129,14 @@ atau, bila port 80 sudah dipakai aplikasi lain:
 http://IP_SERVER:8080
 ```
 
+Jika 8080 juga terpakai (mis. Coolify), skrip otomatis memilih port kosong
+berikutnya (8081, 8082, ...) dan mencetak URL finalnya.
+
 Skrip memakai `EDGE_PROXY=auto`: bila port 80 sudah dipakai Coolify/Traefik,
 Nginx host dilewati dan gateway langsung dibuka di `APP_PORT`. Coolify tidak
-perlu dimatikan dan tidak ada dashboard web yang perlu dibuka.
+perlu dimatikan dan tidak ada dashboard web yang perlu dibuka. Bila domain
+utama sudah dipakai Coolify, domain itu tetap milik Coolify; gunakan URL yang
+dicetak skrip atau sediakan subdomain/DNS khusus.
 
 ### Database
 
@@ -201,7 +222,7 @@ Buka GitHub repository > Settings > Secrets and variables > Actions:
 | `VPS_USERNAME` | user SSH (masukkan ke grup `docker`) |
 | `VPS_SSH_KEY` | private key SSH |
 | `VPS_PORT` | opsional, default 22 |
-| `VPS_APP_DIR` | opsional, default `/opt/kawahputihukk/kawahputih` |
+| `VPS_APP_DIR` | opsional, default `/opt/booking_tiket` |
 
 ### Alur
 
@@ -210,7 +231,10 @@ Buka GitHub repository > Settings > Secrets and variables > Actions:
    serta frontend.
 3. Job `deploy` masuk ke VPS lewat SSH, menjalankan `git pull`, lalu
    `docker compose up -d --build`.
-4. Workflow mengecek `http://127.0.0.1:8080/healthz` sampai aplikasi sehat.
+4. Workflow mengecek `/healthz` **dan** halaman utama sampai aplikasi sehat.
+
+Jika secrets belum diisi, job deploy berhenti dengan pesan yang jelas; build
+tetap tervalidasi. Deploy manual tetap bisa lewat `scripts/bootstrap.sh`.
 
 Tidak ada webhook Coolify dan tidak ada login dashboard.
 

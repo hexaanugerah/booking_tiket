@@ -40,6 +40,7 @@ REPO_URL="${REPO_URL:-https://github.com/hexaanugerah/booking_tiket.git}"
 APP_ENV="${APP_ENV:-local}"
 STOP_OLD_STACK="${STOP_OLD_STACK:-true}"
 ENABLE_UFW="${ENABLE_UFW:-true}"
+APP_PORT_EXPLICIT="${APP_PORT:-}"
 APP_PORT="${APP_PORT:-8080}"
 # auto  : pakai Nginx host bila port 80 bebas; jika tidak, buka APP_PORT langsung.
 # true  : paksa Nginx host (port 80/443).
@@ -156,17 +157,49 @@ fi
 port_in_use() {
   ss -ltn 2>/dev/null | awk 'NR > 1 { print $4 }' | grep -Eq "[:.]$1$"
 }
+
+# Pakai kembali port dari .env bila sebelumnya skrip memilih port otomatis.
+if [[ -z "$APP_PORT_EXPLICIT" && -f .env ]]; then
+  SAVED_APP_PORT="$(grep -E '^APP_PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  if [[ -n "$SAVED_APP_PORT" ]]; then
+    APP_PORT="$SAVED_APP_PORT"
+  fi
+fi
+
 if port_in_use "$APP_PORT"; then
   PORT_OWNER="$(docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | awk -v p=":$APP_PORT->" 'index($0, p) { print $1; exit }')"
   if [[ -n "$PORT_OWNER" ]]; then
     OWNER_PROJECT="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$PORT_OWNER" 2>/dev/null || true)"
     if [[ "$OWNER_PROJECT" == "kawahputih" ]]; then
       ok "Port $APP_PORT sedang dipakai stack Kawah Putih; container akan di-recreate."
+    elif [[ -n "$APP_PORT_EXPLICIT" ]]; then
+      die "Port $APP_PORT dipakai container '$PORT_OWNER' (project: ${OWNER_PROJECT:-bukan compose}). Hentikan dulu atau ubah APP_PORT di deploy.env."
     else
-      die "Port $APP_PORT dipakai container '$PORT_OWNER' (project: ${OWNER_PROJECT:-bukan compose}). Hentikan dulu."
+      AUTO_PORT=""
+      for candidate in $(seq 8080 8099); do
+        if ! port_in_use "$candidate"; then
+          AUTO_PORT="$candidate"
+          break
+        fi
+      done
+      [[ -n "$AUTO_PORT" ]] || die "Port 8080-8099 semuanya terpakai. Set APP_PORT ke port lain di deploy.env."
+      warn "Port $APP_PORT dipakai container '$PORT_OWNER'. Memakai port $AUTO_PORT."
+      APP_PORT="$AUTO_PORT"
     fi
   else
-    die "Port $APP_PORT sudah dipakai proses non-Docker. Hentikan proses tersebut atau ubah APP_PORT di deploy.env."
+    if [[ -n "$APP_PORT_EXPLICIT" ]]; then
+      die "Port $APP_PORT sudah dipakai proses non-Docker. Hentikan proses tersebut atau ubah APP_PORT di deploy.env."
+    fi
+    AUTO_PORT=""
+    for candidate in $(seq 8080 8099); do
+      if ! port_in_use "$candidate"; then
+        AUTO_PORT="$candidate"
+        break
+      fi
+    done
+    [[ -n "$AUTO_PORT" ]] || die "Port 8080-8099 semuanya terpakai. Set APP_PORT ke port lain di deploy.env."
+    warn "Port $APP_PORT sudah dipakai proses lain. Memakai port $AUTO_PORT."
+    APP_PORT="$AUTO_PORT"
   fi
 fi
 
