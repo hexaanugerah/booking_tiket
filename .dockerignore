@@ -4,8 +4,9 @@
 # membocorkan rahasia lokal.
 # =============================================================================
 
-# Git & editor
+# Git, CI & editor
 .git
+.github
 .gitignore
 .idea
 .vscode
@@ -30,13 +31,23 @@ docker-compose*.yml
 **/*.test
 **/*.out
 **/coverage.out
+vendor/
+**/tests/
+storage/logs/
 
 # Environment & rahasia lokal
 **/.env
 **/.env.*
 !**/.env.example
+deploy.env
 
 # Data lokal
 backend/uploads/
 **/*.log
 tmp/
+
+# Berkas deployment (tidak dipakai saat build image)
+scripts/
+backups/
+README.md
+WORKSHOP.md

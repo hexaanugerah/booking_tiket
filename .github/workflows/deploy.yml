@@ -1,0 +1,105 @@
+name: CI/CD Docker - Kawah Putih
+
+# Alur ini menggantikan ketergantungan pada dashboard Coolify:
+# CI membangun image backend + frontend, lalu CD masuk ke VPS lewat SSH
+# dan menjalankan Docker Compose (backend + frontend + MySQL + Redis).
+#
+# Secrets yang diperlukan di GitHub > Settings > Secrets and variables > Actions:
+#   VPS_HOST       : IP/host server
+#   VPS_USERNAME   : user SSH (disarankan user yang masuk grup docker)
+#   VPS_SSH_KEY    : private key SSH
+#   VPS_PORT       : opsional, default 22
+#   VPS_APP_DIR    : opsional, default /opt/kawahputihukk/kawahputih
+#
+# Jika VPS_APP_DIR belum ada, jalankan sekali di server:
+#   sudo bash scripts/deploy-server.sh
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kawahputih-deploy
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & validasi image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Siapkan Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validasi docker compose
+        run: docker compose config --quiet
+
+      - name: Build image backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: backend
+          push: false
+          tags: kawahputih-backend:ci
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build image frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: frontend
+          push: false
+          tags: kawahputih-frontend:ci
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api/v1
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  deploy:
+    name: Deploy SSH + Docker Compose (tanpa Coolify)
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull kode & rebuild di VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -e
+            APP_DIR="${{ secrets.VPS_APP_DIR }}"
+            if [ -z "$APP_DIR" ]; then
+              APP_DIR="/opt/kawahputihukk/kawahputih"
+            fi
+            cd "$APP_DIR"
+            if [ ! -f .env ]; then
+              echo "File .env belum ada. Jalankan sekali di server:"
+              echo "  sudo bash scripts/deploy-server.sh"
+              exit 1
+            fi
+            git config --global --add safe.directory "$APP_DIR" || true
+            git pull --ff-only
+            docker compose up -d --build
+            docker compose ps
+            APP_PORT="$(grep -E '^APP_PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+            APP_PORT="${APP_PORT:-8080}"
+            for i in $(seq 1 30); do
+              if curl -fsS "http://127.0.0.1:${APP_PORT}/healthz"; then
+                exit 0
+              fi
+              sleep 3
+            done
+            echo "Aplikasi belum sehat; periksa docker compose logs."
+            exit 1

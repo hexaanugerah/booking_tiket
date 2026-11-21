@@ -14,6 +14,7 @@ tsconfig.tsbuildinfo
 .env
 .env.*
 !.env.example
+deploy.env
 prod.env
 !.env.prod.example
 !.prod.env.example
@@ -25,11 +26,13 @@ petugas_login.json
 pengunjung_login.json
 validate_ticket.json
 
-# --- Logs & temp ------------------------------------------------------------
+# --- Logs, backup & temp ----------------------------------------------------
 *.log
 npm-debug.log*
 tmp/
 *.tmp
+backups/
+*.sql
 
 # --- Go / other compiled binaries -------------------------------------------
 *.exe

@@ -1,12 +1,17 @@
 # =============================================================================
 # Kawah Putih — seluruh stack dalam satu compose:
-#   frontend (Next.js :3000) -> backend (Go :8080) -> MySQL (:3306) + Redis
+#
+#   browser -> gateway (Nginx :8080)
+#                 ├── /          -> frontend (Next.js :3000)
+#                 ├── /api/v1/*  -> backend (Go :8080)
+#                 └── /uploads/* -> backend (Go :8080)
+#   backend -> MySQL (:3306) + Redis (:6379)
 #
 # Pemakaian:
 #   1. (Opsional) buat file .env di folder ini untuk menimpa nilai default,
 #      misalnya DB_PASSWORD, JWT_ACCESS_SECRET, SEED_*_PASSWORD.
 #   2. docker compose up -d --build
-#   3. Buka http://localhost:3000 (API di http://localhost:8080).
+#   3. Buka http://localhost:8080
 #
 # Semua nilai di bawah memakai format ${VAR:-default}, jadi compose tetap
 # berjalan tanpa file .env. Untuk produksi, ganti password dan isi secret.
@@ -22,7 +27,8 @@ services:
   # Database
   # --------------------------------------------------------------------------
   mysql:
-    image: mysql:8.0
+    # 8.4 = versi LTS. Volume dari MySQL 8.4 tidak bisa dibuka oleh 8.0.
+    image: mysql:8.4
     restart: unless-stopped
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
@@ -66,7 +72,7 @@ services:
       # Untuk produksi set APP_ENV=production dan isi semua secret di .env.
       APP_ENV: ${APP_ENV:-local}
       APP_PORT: "8080"
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://127.0.0.1:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080,http://127.0.0.1:8080}
       BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8080}
 
       # Koneksi database — host "mysql" adalah nama service di atas.
@@ -113,8 +119,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "${BACKEND_PORT:-8080}:8080"
     volumes:
       - uploads:/app/uploads
     healthcheck:
@@ -146,14 +150,37 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 30s
+
+  # --------------------------------------------------------------------------
+  # Gateway: satu-satunya pintu masuk dari browser (port 8080).
+  # Backend, frontend, MySQL, dan Redis tidak diekspos langsung ke host.
+  # --------------------------------------------------------------------------
+  gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./docker/gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    ports:
+      # Default hanya localhost. Untuk akses dari HP di jaringan yang sama,
+      # set BIND_HOST=0.0.0.0 di file .env.
+      - "${BIND_HOST:-127.0.0.1}:${APP_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
 
 volumes:
   mysql-data:
