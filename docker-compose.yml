@@ -120,12 +120,12 @@ services:
         # URL absolut yang dipanggil browser. Default cocok untuk akses dari
         # komputer ini. Saat deploy ke server/domain, ubah lewat .env, mis.
         # NEXT_PUBLIC_API_BASE_URL=https://api.kawahputih.id/api/v1
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080/api/v1}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:1031/api/v1}
     restart: unless-stopped
     environment:
       # Dipakai route handler proxy /api/v1 dan /uploads di sisi server Next.
       # Nilai ini dibaca saat request, bukan saat build.
-      BACKEND_ORIGIN: http://backend:8080
+      BACKEND_ORIGIN: http://backend:1031
       PORT: "3000"
     depends_on:
       backend:
