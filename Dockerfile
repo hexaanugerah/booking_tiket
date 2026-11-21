@@ -104,3 +104,14 @@ USER node
 
 EXPOSE 3000
 CMD ["npm", "run", "start"]
+
+# ============================================================================
+# GATEWAY
+# ============================================================================
+# Konfigurasi Nginx dibakar ke image supaya tidak ada bind-mount file.
+# Bind-mount file sering gagal di platform seperti Coolify karena file tidak
+# ikut tersalin ke direktori compose.
+FROM nginx:1.27-alpine AS gateway
+
+COPY gateway/nginx.conf /etc/nginx/conf.d/default.conf
+
