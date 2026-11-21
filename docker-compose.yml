@@ -26,8 +26,8 @@ services:
       start_period: 30s
     # Buka hanya bila perlu mengakses MySQL dari komputer host
     # (mis. MySQL Workbench / DBeaver). Bisa bentrok dengan MySQL lokal.
-    # ports:
-    #   - "${MYSQL_HOST_PORT:-3306}:3306"
+    ports:
+      - "6033:3306"
 
   redis:
     image: redis:7-alpine
@@ -55,7 +55,7 @@ services:
 
       # Koneksi database — host "mysql" adalah nama service di atas.
       DB_HOST: mysql
-      DB_PORT: "3306"
+      DB_PORT: "6033"
       DB_USER: ${DB_USER:-kawahputih}
       DB_PASSWORD: ${DB_PASSWORD:-kawahputih_secret}
       DB_NAME: ${DB_NAME:-kawah_putih_db}
